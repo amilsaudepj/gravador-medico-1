@@ -24,12 +24,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Dados incompletos" }, { status: 400 })
     }
 
+    // Limpa e formata CPF (remove tudo que não for número)
+    const cleanCpf = body.cpf ? body.cpf.replace(/\D/g, '') : ''
+    
+    // Limpa e formata telefone
+    const cleanPhone = body.phone ? body.phone.replace(/\D/g, '') : ''
+
     console.log('📦 Dados recebidos:', {
       name: body.name,
       email: body.email,
+      phone: cleanPhone,
+      cpf: cleanCpf,
       orderBumps: body.orderBumps,
       paymentMethod: body.paymentMethod,
     })
+
+    // Validação do CPF (deve ter 11 dígitos)
+    if (cleanCpf && cleanCpf.length !== 11) {
+      console.error('❌ CPF inválido:', cleanCpf)
+      return NextResponse.json({ 
+        error: "CPF inválido. Deve conter 11 dígitos." 
+      }, { status: 400 })
+    }
 
     // TODO: Salvar lead no seu banco de dados aqui (Supabase)
     // await saveLeadToDatabase({ email: body.email, name: body.name })
@@ -37,11 +53,11 @@ export async function POST(request: NextRequest) {
     // Monta a URL do checkout Appmax com dados pré-preenchidos
     const checkoutUrl = new URL(`${APPMAX_CHECKOUT_BASE}/${PRODUCT_IDS.main}`)
     
-    // Adiciona parâmetros do cliente
+    // Adiciona parâmetros do cliente (SEM formatação, apenas números)
     checkoutUrl.searchParams.set('name', body.name)
     checkoutUrl.searchParams.set('email', body.email)
-    if (body.phone) checkoutUrl.searchParams.set('phone', body.phone)
-    if (body.cpf) checkoutUrl.searchParams.set('cpf', body.cpf)
+    if (cleanPhone) checkoutUrl.searchParams.set('phone', cleanPhone)
+    if (cleanCpf) checkoutUrl.searchParams.set('cpf', cleanCpf)
 
     // Adiciona UTM params se tiver
     if (body.utmParams) {
@@ -80,6 +96,14 @@ export async function POST(request: NextRequest) {
     */
 
     console.log('🔗 URL de redirecionamento:', finalUrl)
+    console.log('📊 Parâmetros enviados para Appmax:', {
+      product_id: PRODUCT_IDS.main,
+      name: body.name,
+      email: body.email,
+      phone: cleanPhone,
+      cpf: cleanCpf,
+      has_utm: !!body.utmParams,
+    })
 
     // Retorna URL para redirecionar o cliente
     return NextResponse.json({
