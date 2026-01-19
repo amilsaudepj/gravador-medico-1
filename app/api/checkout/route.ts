@@ -50,19 +50,26 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Para order bumps, vamos criar URLs específicas
-    // Se selecionou algum bump, redireciona para o checkout do bump
+    // Determina qual produto usar como base
     let finalUrl = checkoutUrl.toString()
     
+    // SEMPRE usa o produto principal (32880073)
+    // Os order bumps serão adicionados no checkout da Appmax se configurado lá
+    // A Appmax não permite passar múltiplos produtos via URL, então enviamos o principal
+    // e o usuário vê os bumps no checkout hospedado da Appmax
+    
+    console.log('📦 Order bumps selecionados:', body.orderBumps)
+    
+    // Mantém a URL do produto principal
+    // Se você quiser testar com um bump específico, descomente abaixo:
+    /*
     if (body.orderBumps && body.orderBumps.length > 0) {
-      // Usa o primeiro order bump selecionado
       const firstBump = body.orderBumps[0]
       const bumpId = firstBump === 0 ? PRODUCT_IDS.bump1 : 
                      firstBump === 1 ? PRODUCT_IDS.bump2 : 
                      PRODUCT_IDS.bump3
       
-      // Monta URL do order bump
-      const bumpUrl = new URL(`${APPMAX_CHECKOUT_BASE.replace('/ocudf/', '/ocmdf/')}/${bumpId}`)
+      const bumpUrl = new URL(`${APPMAX_CHECKOUT_BASE}/${bumpId}`)
       bumpUrl.searchParams.set('name', body.name)
       bumpUrl.searchParams.set('email', body.email)
       if (body.phone) bumpUrl.searchParams.set('phone', body.phone)
@@ -70,6 +77,7 @@ export async function POST(request: NextRequest) {
       
       finalUrl = bumpUrl.toString()
     }
+    */
 
     console.log('🔗 URL de redirecionamento:', finalUrl)
 
