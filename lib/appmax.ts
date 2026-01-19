@@ -303,32 +303,46 @@ export async function createAppmaxOrder(data: AppmaxOrderRequest): Promise<Appma
       
       console.log('📊 Status da resposta PIX:', paymentResponse.status, paymentResponse.statusText)
     } else if (data.payment_method === 'credit_card' && data.card_data) {
+      const creditCardPayload = {
+        'access-token': APPMAX_API_TOKEN,
+        cart: {
+          order_id: orderId,
+        },
+        customer: {
+          customer_id: customerId,
+        },
+        payment: {
+          CreditCard: {
+            number: data.card_data.number,
+            cvv: data.card_data.cvv,
+            month: parseInt(data.card_data.exp_month),
+            year: parseInt(data.card_data.exp_year),
+            document_number: data.customer.cpf?.replace(/\D/g, '') || '',
+            name: data.card_data.holder_name,
+            installments: data.card_data.installments || 1,
+            soft_descriptor: 'GRAV MEDICO', // Max 13 caracteres
+          },
+        },
+      }
+      
+      console.log('💳 Payload Cartão de Crédito:', JSON.stringify({
+        ...creditCardPayload,
+        'access-token': '***',
+        payment: {
+          CreditCard: {
+            ...creditCardPayload.payment.CreditCard,
+            number: '****',
+            cvv: '***'
+          }
+        }
+      }, null, 2))
+      
       paymentResponse = await fetch(`${APPMAX_API_URL}/payment/credit-card`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          'access-token': APPMAX_API_TOKEN,
-          cart: {
-            order_id: orderId,
-          },
-          customer: {
-            customer_id: customerId,
-          },
-          payment: {
-            CreditCard: {
-              number: data.card_data.number,
-              cvv: data.card_data.cvv,
-              month: parseInt(data.card_data.exp_month),
-              year: parseInt(data.card_data.exp_year),
-              document_number: data.customer.cpf?.replace(/\D/g, '') || '',
-              name: data.card_data.holder_name,
-              installments: data.card_data.installments || 1,
-              soft_descriptor: 'GRAV MEDICO', // Max 13 caracteres
-            },
-          },
-        }),
+        body: JSON.stringify(creditCardPayload),
       })
     } else {
       throw new Error('Método de pagamento não suportado')
