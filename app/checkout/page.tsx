@@ -160,8 +160,7 @@ export default function CheckoutPage() {
   const basePrice = 36
   const orderBumpsTotal = selectedOrderBumps.reduce((acc, idx) => acc + orderBumps[idx].price, 0)
   const subtotal = basePrice + orderBumpsTotal
-  const pixDiscount = paymentMethod === "pix" ? Math.round(subtotal * 0.05) : 0
-  const total = subtotal - pixDiscount
+  const total = subtotal // Sem desconto PIX - desconto via cupom Appmax
 
   // Validações
   const isStep1Valid = () => {
@@ -615,12 +614,9 @@ export default function CheckoutPage() {
                             : "border-gray-200 hover:border-brand-300"
                         }`}
                       >
-                        <div className="absolute -top-2 -right-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg">
-                          -5%
-                        </div>
                         <Wallet className="w-8 h-8 mx-auto mb-2 text-brand-600" />
                         <div className="text-sm font-bold text-gray-900">PIX</div>
-                        <div className="text-xs text-gray-600 mt-1">Desconto de 5%</div>
+                        <div className="text-xs text-gray-600 mt-1">Pagamento instantâneo</div>
                       </button>
                     </div>
 
@@ -724,7 +720,7 @@ export default function CheckoutPage() {
                           <div>
                             <p className="font-bold text-gray-900 mb-1">Pagamento via PIX</p>
                             <p className="text-sm text-gray-600">
-                              Após clicar em finalizar, você receberá o QR Code para pagamento instantâneo com <span className="font-bold text-brand-600">5% de desconto</span>.
+                              Após clicar em finalizar, você receberá o QR Code para pagamento instantâneo.
                             </p>
                           </div>
                         </div>
@@ -855,16 +851,6 @@ export default function CheckoutPage() {
                     <span>Subtotal</span>
                     <span className="font-bold">R$ {subtotal.toFixed(2)}</span>
                   </div>
-                  
-                  {pixDiscount > 0 && (
-                    <div className="flex items-center justify-between text-green-600">
-                      <span className="flex items-center gap-2">
-                        <Zap className="w-4 h-4" />
-                        Desconto PIX (5%)
-                      </span>
-                      <span className="font-bold">-R$ {pixDiscount.toFixed(2)}</span>
-                    </div>
-                  )}
 
                   <div className="pt-3 border-t-2 border-gray-100">
                     <div className="flex items-center justify-between text-2xl font-black">
