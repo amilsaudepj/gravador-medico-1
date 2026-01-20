@@ -44,31 +44,45 @@ export default function CookieBanner() {
   if (!showBanner) return null
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-8 md:max-w-md z-50 animate-slide-up">
-      <div className="bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-4xl px-4 animate-slide-up">
+      <div className="bg-gradient-to-r from-emerald-600 to-green-600 rounded-lg shadow-2xl border border-emerald-400/30">
         
-        {/* Barra superior azul */}
-        <div className="h-1 bg-blue-600" />
-        
-        <div className="p-5">
-          {/* Cabeçalho com ID do site */}
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🍪</span>
-              <div>
-                <h3 className="text-base font-semibold text-gray-900">
-                  Cookies
-                </h3>
-                <p className="text-xs text-gray-500">
-                  ID: gravadormedico.com.br
-                </p>
-              </div>
+        <div className="px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+          
+          {/* Conteúdo - horizontal */}
+          <div className="flex items-center gap-4 flex-1">
+            <span className="text-2xl flex-shrink-0">🍪</span>
+            <div className="flex-1">
+              <p className="text-white text-sm leading-relaxed">
+                Usamos cookies para melhorar sua experiência. 
+                <span className="mx-2">•</span>
+                <Link 
+                  href="/politica-privacidade" 
+                  className="underline hover:text-emerald-100 transition-colors"
+                >
+                  Política de Privacidade
+                </Link>
+              </p>
             </div>
-            
-            {/* Botão fechar (permite continuar sem decidir) */}
+          </div>
+
+          {/* Botões - horizontal */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={handleAccept}
+              className="px-6 py-2 bg-white hover:bg-emerald-50 text-emerald-700 text-sm font-medium rounded-md transition-colors shadow-sm"
+            >
+              Aceitar
+            </button>
+            <button
+              onClick={handleReject}
+              className="px-4 py-2 text-white/90 hover:text-white text-sm font-medium transition-colors"
+            >
+              Recusar
+            </button>
             <button
               onClick={() => setShowBanner(false)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-white/70 hover:text-white transition-colors ml-1"
               aria-label="Fechar"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -77,43 +91,6 @@ export default function CookieBanner() {
             </button>
           </div>
 
-          {/* Texto */}
-          <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-            Usamos cookies para melhorar sua experiência e analisar nosso tráfego. 
-            Ao continuar, você aceita nosso uso de cookies.
-          </p>
-
-          {/* Links */}
-          <div className="flex gap-3 text-xs mb-4">
-            <Link 
-              href="/politica-privacidade" 
-              className="text-blue-600 hover:text-blue-700 underline underline-offset-2"
-            >
-              Política de Privacidade
-            </Link>
-            <Link 
-              href="/termos-de-uso" 
-              className="text-blue-600 hover:text-blue-700 underline underline-offset-2"
-            >
-              Termos de Uso
-            </Link>
-          </div>
-
-          {/* Botões */}
-          <div className="flex gap-2">
-            <button
-              onClick={handleAccept}
-              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors"
-            >
-              Aceitar
-            </button>
-            <button
-              onClick={handleReject}
-              className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-md transition-colors"
-            >
-              Recusar
-            </button>
-          </div>
         </div>
       </div>
 
