@@ -425,7 +425,8 @@ SELECT
   COALESCE(AVG(si.price), 0) as average_price
 FROM products p
 LEFT JOIN sales_items si ON p.id = si.product_id
-LEFT JOIN sales s ON si.sale_id = s.id AND s.status IN ('approved', 'paid', 'completed')
+INNER JOIN sales s ON si.sale_id = s.id
+WHERE s.status IN ('approved', 'paid', 'completed') OR si.sale_id IS NULL
 GROUP BY p.id, p.sku, p.name, p.category, p.price, p.is_active;
 
 -- View: Funil de vendas CRM
