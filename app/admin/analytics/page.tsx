@@ -29,10 +29,43 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState(7) // últimos 7 dias
+  const [onlineCount, setOnlineCount] = useState(0) // Estado separado para online
 
   useEffect(() => {
     loadAnalytics()
   }, [dateRange])
+
+  // 🔥 Atualização em tempo real do "Online Agora" a cada 5 segundos
+  useEffect(() => {
+    // Carregar imediatamente
+    updateOnlineCount()
+
+    // Atualizar a cada 5 segundos
+    const interval = setInterval(() => {
+      updateOnlineCount()
+    }, 5000) // 5 segundos
+
+    return () => clearInterval(interval) // Limpar ao desmontar
+  }, [])
+
+  // Função para atualizar apenas o contador online
+  async function updateOnlineCount() {
+    try {
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      const { data: onlineData } = await supabase
+        .from('analytics_visits')
+        .select('session_id')
+        .gte('last_seen', fiveMinutesAgo)
+        .eq('is_online', true)
+
+      if (onlineData) {
+        const uniqueOnline = new Set(onlineData.map(v => v.session_id)).size
+        setOnlineCount(uniqueOnline)
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar online:', error)
+    }
+  }
 
   async function loadAnalytics() {
     try {
@@ -247,15 +280,21 @@ export default function AnalyticsPage() {
 
       {/* Cards de métricas principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* 🆕 VISITANTES ONLINE */}
-        <Card className="p-6 bg-gradient-to-br from-green-500 to-emerald-600 text-white">
+        {/* 🆕 VISITANTES ONLINE - ATUALIZAÇÃO EM TEMPO REAL */}
+        <Card className="p-6 bg-gradient-to-br from-green-500 to-emerald-600 text-white relative">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-lg">
+            <div className="p-3 bg-white/20 rounded-lg relative">
               <Radio className="w-6 h-6" />
+              {/* Indicador pulsante */}
+              <span className="absolute top-0 right-0 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+              </span>
             </div>
             <div>
               <p className="text-sm text-white/80">Online Agora</p>
-              <p className="text-2xl font-bold">{data?.onlineVisitors || 0}</p>
+              <p className="text-2xl font-bold">{onlineCount}</p>
+              <p className="text-xs text-white/60 mt-1">Atualiza a cada 5s</p>
             </div>
           </div>
         </Card>
