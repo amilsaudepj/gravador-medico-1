@@ -455,7 +455,7 @@ export default function CheckoutPage() {
       <div className="h-20 md:h-24"></div>
 
       {/* Main Content */}
-      <div className="container mx-auto max-w-7xl px-3 sm:px-4 py-6 md:py-12 pt-8 md:pt-12">
+      <div className="container mx-auto max-w-7xl px-3 sm:px-4 py-6 md:py-12 pt-12 md:pt-16">
         
         {/* Header */}
         <motion.div
@@ -1023,7 +1023,7 @@ export default function CheckoutPage() {
 
                 {/* Campo Cupom */}
                 <div className="mb-4 md:mb-6 pb-4 md:pb-6 border-b-2 border-gray-100">
-                  <h4 className="font-bold text-sm md:text-base text-gray-900 mb-3">Cupom de Desconto</h4>
+                  <h4 className="font-bold text-sm md:text-base text-gray-900 mb-3">Possui cupom de desconto?</h4>
                   
                   {appliedCupom ? (
                     <div className="bg-green-50 border-2 border-green-500 rounded-xl p-3 md:p-4">

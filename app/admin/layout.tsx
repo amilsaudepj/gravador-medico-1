@@ -14,6 +14,7 @@ import {
   Package,
   Bell,
   Search,
+  ShieldAlert
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -23,6 +24,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   // Verificar autenticação e role de admin
   useEffect(() => {
@@ -47,11 +49,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .single()
 
       if (error || !profile || profile.role !== 'admin') {
-        console.error('❌ Usuário não é admin')
-        router.push('/')
+        console.error('❌ Acesso negado - Usuário não é admin')
+        // NÃO redirecionar, apenas mostrar mensagem de acesso negado
+        setIsAdmin(false)
+        setLoading(false)
         return
       }
 
+      setIsAdmin(true)
       setUserEmail(user.email || null)
       setLoading(false)
     } catch (error) {
@@ -116,6 +121,59 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600 font-medium">Verificando permissões...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Se não é admin, mostrar mensagem de acesso negado
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <div className="max-w-md w-full mx-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
+            {/* Ícone */}
+            <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-6">
+              <ShieldAlert className="w-10 h-10 text-red-600" />
+            </div>
+
+            {/* Título */}
+            <h1 className="text-3xl font-black text-gray-900 mb-3">
+              Acesso Negado
+            </h1>
+
+            {/* Mensagem */}
+            <p className="text-gray-600 mb-6 leading-relaxed">
+              Você não tem permissão para acessar o painel administrativo. 
+              Entre em contato com o administrador do sistema.
+            </p>
+
+            {/* Detalhes técnicos */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+              <p className="text-sm text-gray-500 mb-2">
+                <span className="font-semibold">Email:</span> {userEmail || 'Não autenticado'}
+              </p>
+              <p className="text-sm text-gray-500">
+                <span className="font-semibold">Status:</span> Sem permissões de administrador
+              </p>
+            </div>
+
+            {/* Botões de ação */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => router.push('/')}
+                className="flex-1 bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold py-3 px-6 rounded-lg hover:shadow-lg transition-all"
+              >
+                Voltar ao Site
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-lg hover:bg-gray-300 transition-all"
+              >
+                Fazer Logout
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     )
