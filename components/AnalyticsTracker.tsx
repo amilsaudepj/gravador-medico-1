@@ -65,6 +65,35 @@ export default function AnalyticsTracker({ city, country, region }: AnalyticsPro
     }
   }, [pathname, searchParams, city, country, region])
 
+  // 🔥 HEARTBEAT: Atualiza last_seen a cada 10 segundos para manter usuário "online"
+  useEffect(() => {
+    const consent = localStorage.getItem('cookie_consent')
+    if (consent !== 'accepted') return
+
+    const heartbeat = setInterval(async () => {
+      const sessionId = localStorage.getItem('analytics_session_id')
+      if (!sessionId) return
+
+      try {
+        await supabase
+          .from('analytics_visits')
+          .update({ 
+            last_seen: new Date().toISOString(),
+            is_online: true 
+          })
+          .eq('session_id', sessionId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        console.log('💓 Heartbeat - last_seen atualizado')
+      } catch (error) {
+        console.error('Erro no heartbeat:', error)
+      }
+    }, 10000) // A cada 10 segundos
+
+    return () => clearInterval(heartbeat)
+  }, [])
+
   /**
    * Extrai um cookie específico do navegador
    */

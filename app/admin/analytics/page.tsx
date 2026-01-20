@@ -35,15 +35,16 @@ export default function AnalyticsPage() {
     loadAnalytics()
   }, [dateRange])
 
-  // 🔥 Atualização em tempo real do "Online Agora" a cada 5 segundos
+  // 🔥 Atualização em tempo real do "Online Agora" a cada 3 segundos
   useEffect(() => {
     // Carregar imediatamente
     updateOnlineCount()
 
-    // Atualizar a cada 5 segundos
+    // Atualizar a cada 3 segundos
     const interval = setInterval(() => {
+      console.log('🔄 Atualizando contador online...')
       updateOnlineCount()
-    }, 5000) // 5 segundos
+    }, 3000) // 3 segundos
 
     return () => clearInterval(interval) // Limpar ao desmontar
   }, [])
@@ -51,19 +52,31 @@ export default function AnalyticsPage() {
   // Função para atualizar apenas o contador online
   async function updateOnlineCount() {
     try {
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
-      const { data: onlineData } = await supabase
+      const now = new Date()
+      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000).toISOString()
+      
+      const { data: onlineData, error } = await supabase
         .from('analytics_visits')
-        .select('session_id')
+        .select('session_id, last_seen')
         .gte('last_seen', fiveMinutesAgo)
         .eq('is_online', true)
 
+      if (error) {
+        console.error('❌ Erro na query:', error)
+        return
+      }
+
       if (onlineData) {
         const uniqueOnline = new Set(onlineData.map(v => v.session_id)).size
+        console.log(`👥 Online agora: ${uniqueOnline} usuários`, {
+          total_registros: onlineData.length,
+          ultimos_5min: fiveMinutesAgo,
+          agora: now.toISOString()
+        })
         setOnlineCount(uniqueOnline)
       }
     } catch (error) {
-      console.error('Erro ao atualizar online:', error)
+      console.error('💥 Erro ao atualizar online:', error)
     }
   }
 
@@ -294,7 +307,7 @@ export default function AnalyticsPage() {
             <div>
               <p className="text-sm text-white/80">Online Agora</p>
               <p className="text-2xl font-bold">{onlineCount}</p>
-              <p className="text-xs text-white/60 mt-1">Atualiza a cada 5s</p>
+              <p className="text-xs text-white/60 mt-1">Atualiza a cada 3s</p>
             </div>
           </div>
         </Card>
