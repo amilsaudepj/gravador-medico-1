@@ -1064,7 +1064,7 @@ export default function CheckoutPage() {
             </div>
 
             {/* Conteúdo PIX */}
-            <div className="min-h-screen pt-24 pb-12 px-4">
+            <div className="min-h-screen pt-28 md:pt-24 pb-12 px-4">
               <div className="container mx-auto max-w-2xl">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
