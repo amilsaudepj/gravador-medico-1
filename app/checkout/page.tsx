@@ -165,8 +165,40 @@ export default function CheckoutPage() {
   const subtotal = basePrice + orderBumpsTotal
   const total = subtotal // Sem desconto PIX - desconto via cupom Appmax
   
-  // Calcula parcelas máximas baseado no valor (regra Appmax: max 8x, min R$ 5 por parcela)
-  const maxInstallments = Math.min(8, Math.floor(total / 5))
+  // Calcula parcelas com JUROS SIMPLES - Lógica Appmax
+  // Taxa: 2.49% ao mês (0.0249)
+  // Fórmula: ValorTotalComJuros = ValorOriginal * (1 + (0.0249 * NumeroParcelas))
+  // ValorParcela = ValorTotalComJuros / NumeroParcelas
+  // Limite: Parcela mínima de R$ 5,00
+  const calculateInstallments = () => {
+    const TAXA_JUROS = 0.0249 // 2.49% ao mês
+    const PARCELA_MINIMA = 5.00
+    const MAX_PARCELAS = 12
+    
+    const parcelas = []
+    
+    for (let numParcelas = 1; numParcelas <= MAX_PARCELAS; numParcelas++) {
+      // Juros Simples
+      const valorTotalComJuros = total * (1 + (TAXA_JUROS * numParcelas))
+      const valorParcela = valorTotalComJuros / numParcelas
+      
+      // Se a parcela for menor que R$ 5,00, para de calcular
+      if (valorParcela < PARCELA_MINIMA) {
+        break
+      }
+      
+      parcelas.push({
+        numero: numParcelas,
+        valorParcela: Number(valorParcela.toFixed(2)),
+        valorTotal: Number(valorTotalComJuros.toFixed(2))
+      })
+    }
+    
+    return parcelas
+  }
+  
+  const parcelasDisponiveis = calculateInstallments()
+  const maxInstallments = parcelasDisponiveis.length
 
   // Validações
   const isStep1Valid = () => {
@@ -748,14 +780,15 @@ export default function CheckoutPage() {
                             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors bg-white"
                             required
                           >
-                            {Array.from({ length: maxInstallments }, (_, i) => i + 1).map((installment) => (
-                              <option key={installment} value={installment}>
-                                {installment}x de R$ {(total / installment).toFixed(2).replace('.', ',')} sem juros
+                            {parcelasDisponiveis.map((parcela) => (
+                              <option key={parcela.numero} value={parcela.numero}>
+                                {parcela.numero}x de R$ {parcela.valorParcela.toFixed(2).replace('.', ',')}
+                                {parcela.numero === 1 ? ' sem juros' : ` (Total: R$ ${parcela.valorTotal.toFixed(2).replace('.', ',')})`}
                               </option>
                             ))}
                           </select>
                           <p className="text-xs text-gray-500 mt-1">
-                            Parcelamento em até {maxInstallments}x sem juros
+                            Parcelamento em até {maxInstallments}x • Taxa: 2,49% a.m.
                           </p>
                         </div>
                       </motion.div>
