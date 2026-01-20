@@ -127,30 +127,66 @@ export default function CRMPage() {
     try {
       setLoading(true)
       
-      // Por enquanto, vamos criar leads a partir da tabela sales
-      const { data: sales, error } = await supabase
+      console.log('📊 Carregando leads do CRM...')
+      
+      // 1. Buscar todas as vendas
+      const { data: sales, error: salesError } = await supabase
         .from('sales')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (salesError) {
+        console.error('❌ Erro ao buscar vendas:', salesError)
+      }
 
-      // Converter vendas em leads (temporário - depois teremos tabela própria)
-      const leadsData: Lead[] = sales?.map(sale => ({
-        id: sale.id,
+      // 2. Buscar todos os carrinhos abandonados
+      const { data: carts, error: cartsError } = await supabase
+        .from('abandoned_carts')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (cartsError) {
+        console.error('❌ Erro ao buscar carrinhos:', cartsError)
+      }
+
+      console.log('✅ Vendas encontradas:', sales?.length || 0)
+      console.log('✅ Carrinhos encontrados:', carts?.length || 0)
+
+      const leadsFromSales: Lead[] = sales?.map(sale => ({
+        id: `sale-${sale.id}`,
         name: sale.customer_name || 'Cliente',
         email: sale.customer_email,
         phone: sale.customer_phone,
-        stage: sale.status === 'approved' ? 'won' : 
+        stage: sale.status === 'approved' || sale.status === 'paid' ? 'won' : 
                sale.status === 'pending' ? 'proposal' :
-               sale.status === 'abandoned' ? 'lost' : 'lead',
-        value: sale.total_amount,
-        source: 'Checkout',
+               sale.status === 'processing' ? 'negotiation' :
+               'lead',
+        value: Number(sale.total_amount) || 0,
+        source: 'Checkout - Venda',
         created_at: sale.created_at,
-        updated_at: sale.updated_at,
+        updated_at: sale.updated_at || sale.created_at,
       })) || []
 
-      setLeads(leadsData)
+      const leadsFromCarts: Lead[] = carts?.map(cart => ({
+        id: `cart-${cart.id}`,
+        name: cart.customer_name || 'Cliente',
+        email: cart.customer_email,
+        phone: cart.customer_phone,
+        stage: cart.status === 'abandoned' ? 'lead' : 
+               cart.status === 'recovered' ? 'won' : 'contact',
+        value: Number(cart.total_value) || 0,
+        source: 'Checkout - Carrinho Abandonado',
+        notes: `Abandonou em: ${cart.checkout_step || 'início'}`,
+        created_at: cart.created_at,
+        updated_at: cart.updated_at || cart.created_at,
+      })) || []
+
+      // Combinar todos os leads
+      const allLeads = [...leadsFromSales, ...leadsFromCarts]
+      
+      console.log('✅ Total de leads:', allLeads.length)
+      
+      setLeads(allLeads)
     } catch (error) {
       console.error('Erro ao carregar leads:', error)
     } finally {
@@ -309,8 +345,8 @@ export default function CRMPage() {
       </div>
 
       {/* Kanban Board */}
-      <div className="overflow-x-auto pb-4">
-        <div className="flex gap-4 min-w-max">
+      <div className="overflow-x-auto pb-4 -mx-4 px-4">
+        <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
           {FUNIL_STAGES.map((stage) => {
             const stageLeads = getLeadsByStage(stage.id)
             const StageIcon = stage.icon
@@ -337,7 +373,7 @@ export default function CRMPage() {
                 </div>
 
                 {/* Cards Container */}
-                <div className="bg-gray-800/30 backdrop-blur-sm rounded-b-xl border-2 border-t-0 ${stage.borderColor} p-3 min-h-[400px] space-y-3">
+                <div className={`bg-gray-800/30 backdrop-blur-sm rounded-b-xl border-2 border-t-0 ${stage.borderColor} p-3 min-h-[400px] space-y-3`}>
                   <AnimatePresence>
                     {stageLeads.map((lead) => (
                       <motion.div
