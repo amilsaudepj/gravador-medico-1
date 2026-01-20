@@ -1574,11 +1574,11 @@ export default function LandingPage() {
                 scale: [1, 1.03, 1]
               }}
               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-              className="group relative inline-flex items-center gap-3 bg-gradient-to-r from-[#5DBEA3] via-[#80D4C3] to-[#5DBEA3] bg-[length:200%_100%] animate-gradient text-white px-10 sm:px-14 py-5 sm:py-6 rounded-full text-xl sm:text-2xl font-black shadow-2xl hover:shadow-[#5DBEA3]/50 transition-all whitespace-nowrap"
+              className="group relative inline-flex items-center gap-3 bg-gradient-to-r from-[#5DBEA3] via-[#80D4C3] to-[#5DBEA3] bg-[length:200%_100%] animate-gradient text-white px-8 sm:px-10 py-4 sm:py-5 rounded-full text-lg sm:text-xl font-black shadow-2xl hover:shadow-[#5DBEA3]/50 transition-all whitespace-nowrap max-w-sm mx-auto"
             >
-              <Mic className="w-6 h-6 flex-shrink-0" />
-              <span>Quero Todos Esses Recursos</span>
-              <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform flex-shrink-0" />
+              <Mic className="w-5 h-5 flex-shrink-0" />
+              <span>Quero todos esses recursos</span>
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform flex-shrink-0" />
             </motion.button>
             <p className="text-base text-white mt-4 font-semibold">Apenas R$ 36 • Acesso imediato</p>
           </motion.div>
@@ -1620,7 +1620,7 @@ export default function LandingPage() {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto px-4">
             {[
               {
                 specialty: "Ginecologia",
@@ -1696,31 +1696,31 @@ export default function LandingPage() {
                 className="group h-full"
               >
                 <Card3D className="h-full">
-                  <div className="relative bg-white rounded-2xl p-6 md:p-8 border-2 border-gray-200 hover:border-brand-400 transition-all duration-300 shadow-lg hover:shadow-2xl h-full flex flex-col min-h-[420px]">
+                  <div className="relative bg-white rounded-2xl p-4 border-2 border-gray-200 hover:border-brand-400 transition-all duration-300 shadow-lg hover:shadow-2xl h-full flex flex-col">
 
                     {/* Nome da especialidade */}
-                    <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-4 text-center">
+                    <h3 className="text-lg md:text-xl font-black text-gray-900 mb-3 text-center">
                       {item.specialty}
                     </h3>
 
                     {/* Descrição */}
-                    <p className="text-gray-700 leading-relaxed mb-4 text-center min-h-[96px] flex-shrink-0">
+                    <p className="text-sm text-gray-700 leading-snug mb-3 text-center flex-shrink-0">
                       {item.description}
                     </p>
 
                     {/* Badge de caso de uso */}
-                    <div className="mb-4 flex-shrink-0">
-                      <div className={`bg-gradient-to-r ${item.color} px-4 py-2.5 rounded-full text-center`}>
-                        <p className="text-white text-sm font-bold">{item.useCase}</p>
+                    <div className="mb-3 flex-shrink-0">
+                      <div className={`bg-gradient-to-r ${item.color} px-3 py-1.5 rounded-full text-center`}>
+                        <p className="text-white text-xs font-bold">{item.useCase}</p>
                       </div>
                     </div>
 
                     {/* Features específicas */}
-                    <div className="space-y-2 pt-4 border-t border-gray-200 flex-shrink-0">
+                    <div className="space-y-1.5 pt-3 border-t border-gray-200 flex-shrink-0">
                       {item.features.map((feature, i) => (
                         <div key={i} className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full bg-gradient-to-r ${item.color}`} />
-                          <span className="text-sm text-gray-600 font-medium">{feature}</span>
+                          <div className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${item.color}`} />
+                          <span className="text-xs text-gray-600 font-medium">{feature}</span>
                         </div>
                       ))}
                     </div>
