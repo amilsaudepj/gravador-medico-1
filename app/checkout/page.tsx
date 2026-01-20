@@ -565,7 +565,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 via-white to-brand-50">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-brand-50 via-white to-brand-50 overflow-x-hidden">
       
       {/* Banner de Escassez no Topo */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-red-600 via-red-500 to-orange-500 text-white shadow-2xl">
@@ -720,7 +720,7 @@ export default function CheckoutPage() {
                         autoComplete="name"
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full max-w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors text-sm md:text-base box-border"
+                        className="w-full max-w-full px-3 sm:px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors box-border"
                         placeholder="Dr. João Silva"
                         required
                       />
@@ -737,7 +737,7 @@ export default function CheckoutPage() {
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         onBlur={handleSaveAbandonedCart}
-                        className="w-full max-w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors text-sm md:text-base box-border"
+                        className="w-full max-w-full px-3 sm:px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors box-border"
                         placeholder="seu@email.com"
                         required
                       />
@@ -755,7 +755,7 @@ export default function CheckoutPage() {
                           value={formData.phone}
                           onChange={(e) => setFormData({ ...formData, phone: formatPhone(e.target.value) })}
                           onBlur={handleSaveAbandonedCart}
-                          className="w-full max-w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors text-sm md:text-base box-border"
+                          className="w-full max-w-full px-3 sm:px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors box-border"
                           placeholder="(11) 99999-9999"
                           maxLength={15}
                         />
@@ -771,7 +771,7 @@ export default function CheckoutPage() {
                           autoComplete="off"
                           value={formData.cpf}
                           onChange={(e) => setFormData({ ...formData, cpf: formatCPF(e.target.value) })}
-                          className="w-full max-w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors text-sm md:text-base box-border"
+                          className="w-full max-w-full px-3 sm:px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors box-border"
                           placeholder="000.000.000-00"
                           maxLength={14}
                           required
@@ -959,9 +959,10 @@ export default function CheckoutPage() {
                             type="text"
                             name="cardnumber"
                             autoComplete="cc-number"
+                            inputMode="numeric"
                             value={cardData.number}
                             onChange={(e) => setCardData({ ...cardData, number: formatCardNumber(e.target.value) })}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors"
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors box-border"
                             placeholder="0000 0000 0000 0000"
                             maxLength={19}
                             required
@@ -978,7 +979,7 @@ export default function CheckoutPage() {
                             autoComplete="cc-name"
                             value={cardData.holderName}
                             onChange={(e) => setCardData({ ...cardData, holderName: e.target.value.toUpperCase() })}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors"
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors box-border"
                             placeholder="NOME COMO NO CARTÃO"
                             required
                           />
@@ -993,9 +994,10 @@ export default function CheckoutPage() {
                               type="text"
                               name="cc-exp-month"
                               autoComplete="cc-exp-month"
+                              inputMode="numeric"
                               value={cardData.expMonth}
                               onChange={(e) => setCardData({ ...cardData, expMonth: e.target.value.replace(/\D/g, '').slice(0, 2) })}
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors"
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors box-border"
                               placeholder="12"
                               maxLength={2}
                               required
@@ -1010,9 +1012,10 @@ export default function CheckoutPage() {
                               type="text"
                               name="cc-exp-year"
                               autoComplete="cc-exp-year"
+                              inputMode="numeric"
                               value={cardData.expYear}
                               onChange={(e) => setCardData({ ...cardData, expYear: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors"
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors box-border"
                               placeholder="2028"
                               maxLength={4}
                               required
@@ -1027,9 +1030,10 @@ export default function CheckoutPage() {
                               type="text"
                               name="cc-csc"
                               autoComplete="cc-csc"
+                              inputMode="numeric"
                               value={cardData.cvv}
                               onChange={(e) => setCardData({ ...cardData, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors"
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors box-border"
                               placeholder="123"
                               maxLength={4}
                               required
@@ -1045,7 +1049,7 @@ export default function CheckoutPage() {
                           <select
                             value={cardData.installments}
                             onChange={(e) => setCardData({ ...cardData, installments: parseInt(e.target.value) })}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors bg-white"
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors bg-white box-border"
                             required
                           >
                             {parcelasDisponiveis.map((parcela) => (

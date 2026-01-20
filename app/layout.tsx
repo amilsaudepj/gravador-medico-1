@@ -13,6 +13,12 @@ export const metadata: Metadata = {
     shortcut: '/images/novo-icon-gravadormedico.png',
     apple: '/images/novo-icon-gravadormedico.png',
   },
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 5, // Permite zoom manual (acessibilidade)
+    userScalable: true,
+  },
 }
 
 export default async function RootLayout({

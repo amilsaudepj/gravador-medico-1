@@ -41,6 +41,42 @@
   html {
     scroll-behavior: smooth;
   }
+
+  /* 🛡️ CORREÇÃO ANTI-ZOOM MOBILE - Checkout estável */
+  input,
+  select,
+  textarea {
+    /* Garantir font-size mínimo de 16px no mobile para evitar auto-zoom */
+    font-size: 16px;
+    
+    /* Estabilizar layout durante foco */
+    touch-action: manipulation;
+    
+    /* Evitar reflow por transform */
+    transform-origin: center center;
+    
+    /* Prevenir comportamentos estranhos no iOS */
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  /* Em telas maiores (desktop), permite font-size menores */
+  @media (min-width: 768px) {
+    input,
+    select,
+    textarea {
+      font-size: inherit; /* Respeita classes do Tailwind */
+    }
+  }
+
+  /* Prevenir zoom em foco (iOS Safari) mantendo acessibilidade */
+  @supports (-webkit-touch-callout: none) {
+    input:focus,
+    select:focus,
+    textarea:focus {
+      font-size: 16px;
+    }
+  }
 }
 
 @layer utilities {
