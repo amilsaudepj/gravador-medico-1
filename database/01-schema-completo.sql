@@ -391,6 +391,7 @@ CREATE TRIGGER update_crm_activities_updated_at
 -- ========================================
 -- 7. VIEWS ANALÍTICAS
 -- ========================================
+-- OBS: Views criadas DEPOIS de todas as tabelas existirem
 
 -- View: Resumo de vendas por cliente
 CREATE OR REPLACE VIEW customer_sales_summary AS
