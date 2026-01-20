@@ -870,16 +870,15 @@ export default function LandingPage() {
               dragElastic={0.1}
               whileTap={{ cursor: "grabbing" }}
               animate={{
-                x: ["0%", "-50%"],
+                x: [0, -1440],
               }}
               transition={{
                 x: {
                   repeat: Infinity,
                   repeatType: "loop",
-                  duration: 2,
+                  duration: 5,
                   ease: "linear",
                 },
-                type: "tween",
               }}
             >
               {/* Duplicar array para loop infinito */}
