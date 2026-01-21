@@ -15,6 +15,7 @@ import {
 import { supabaseAdmin } from '@/lib/supabase'
 import { format, subDays, startOfDay, endOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { formatMoney, formatPercent } from '@/lib/format'
 import {
   LineChart,
   Line,
@@ -187,11 +188,11 @@ Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
 RESUMO EXECUTIVO
 ============================================
 
-Faturamento Total: R$ ${data.totalRevenue.toFixed(2)}
+Faturamento Total: R$ ${formatMoney(data.totalRevenue)}
 Total de Pedidos: ${data.totalOrders}
 Clientes Únicos: ${data.totalCustomers}
-Ticket Médio: R$ ${data.averageTicket.toFixed(2)}
-Taxa de Conversão: ${data.conversionRate.toFixed(2)}%
+Ticket Médio: R$ ${formatMoney(data.averageTicket)}
+Taxa de Conversão: ${formatPercent(data.conversionRate)}%
 
 ============================================
 TOP 5 PRODUTOS
@@ -201,7 +202,7 @@ ${data.topProducts
   .map(
     (p, i) =>
       `${i + 1}. ${p.name}
-   Receita: R$ ${p.revenue.toFixed(2)}
+   Receita: R$ ${formatMoney(p.revenue)}
    Unidades: ${p.quantity}`
   )
   .join('\n\n')}
@@ -211,7 +212,7 @@ RECEITA DIÁRIA
 ============================================
 
 ${data.dailyRevenue
-  .map((d) => `${d.date}: R$ ${d.revenue.toFixed(2)} (${d.orders} pedidos)`)
+  .map((d) => `${d.date}: R$ ${formatMoney(d.revenue)} (${d.orders} pedidos)`)
   .join('\n')}
 
 ---
@@ -385,7 +386,7 @@ Relatório gerado automaticamente pelo Gravador Médico
         >
           <TrendingUp className="w-8 h-8 text-green-400 mb-3" />
           <h3 className="text-gray-400 text-sm font-semibold mb-1">Conversão</h3>
-          <p className="text-2xl font-black text-white">{data.conversionRate.toFixed(1)}%</p>
+          <p className="text-2xl font-black text-white">{formatPercent(data.conversionRate)}%</p>
         </motion.div>
       </div>
 
@@ -456,7 +457,7 @@ Relatório gerado automaticamente pelo Gravador Médico
                   R$ {product.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </div>
                 <div className="text-sm text-gray-400">
-                  {((product.revenue / data.totalRevenue) * 100).toFixed(1)}% do total
+                  {formatPercent((product.revenue / data.totalRevenue) * 100)}% do total
                 </div>
               </div>
             </div>

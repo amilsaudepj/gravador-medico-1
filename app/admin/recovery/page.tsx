@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { formatMoney, formatPercent } from '@/lib/format'
 
 interface CheckoutAttempt {
   id: string
@@ -109,7 +110,7 @@ export default function RecoveryPage() {
     // Mensagem personalizada
     const message = `Olá ${name}! 👋
 
-Notamos que você iniciou uma compra no valor de *R$ ${parseFloat(amount).toFixed(2)}*, mas não finalizou o pagamento. 
+Notamos que você iniciou uma compra no valor de *R$ ${formatMoney(parseFloat(amount))}*, mas não finalizou o pagamento. 
 
 Posso te ajudar a concluir seu pedido? Se tiver alguma dúvida, estou à disposição! 😊`
 
@@ -123,7 +124,7 @@ Posso te ajudar a concluir seu pedido? Se tiver alguma dúvida, estou à disposi
   const statsCards = [
     {
       title: 'Receita Recuperada',
-      value: `R$ ${metrics.totalRecovered.toFixed(2)}`,
+      value: `R$ ${formatMoney(metrics.totalRecovered)}`,
       icon: DollarSign,
       color: 'bg-green-500',
       textColor: 'text-green-600',
@@ -131,7 +132,7 @@ Posso te ajudar a concluir seu pedido? Se tiver alguma dúvida, estou à disposi
     },
     {
       title: 'PIX Pendente',
-      value: `R$ ${metrics.totalPending.toFixed(2)}`,
+      value: `R$ ${formatMoney(metrics.totalPending)}`,
       icon: Clock,
       color: 'bg-yellow-500',
       textColor: 'text-yellow-600',
@@ -139,7 +140,7 @@ Posso te ajudar a concluir seu pedido? Se tiver alguma dúvida, estou à disposi
     },
     {
       title: 'Abandonos',
-      value: `R$ ${metrics.totalAbandoned.toFixed(2)}`,
+      value: `R$ ${formatMoney(metrics.totalAbandoned)}`,
       icon: ShoppingCart,
       color: 'bg-red-500',
       textColor: 'text-red-600',
@@ -147,7 +148,7 @@ Posso te ajudar a concluir seu pedido? Se tiver alguma dúvida, estou à disposi
     },
     {
       title: 'Taxa de Conversão',
-      value: `${metrics.conversionRate.toFixed(1)}%`,
+      value: `${formatPercent(metrics.conversionRate)}%`,
       icon: TrendingUp,
       color: 'bg-blue-500',
       textColor: 'text-blue-600',
@@ -340,7 +341,7 @@ Posso te ajudar a concluir seu pedido? Se tiver alguma dúvida, estou à disposi
                       </td>
                       <td className="px-6 py-4">
                         <span className="font-semibold text-gray-900">
-                          R$ {parseFloat(attempt.total_amount).toFixed(2)}
+                          R$ {formatMoney(parseFloat(attempt.total_amount))}
                         </span>
                       </td>
                       <td className="px-6 py-4">{getStatusBadge(attempt.recovery_status)}</td>

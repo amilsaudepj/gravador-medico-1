@@ -6,6 +6,7 @@ import { Webhook, Search, Filter, Calendar, CheckCircle, XCircle, Clock, Eye } f
 import { supabaseAdmin } from '@/lib/supabase'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { formatMoney } from '@/lib/format'
 
 interface WebhookLog {
   id: string
@@ -273,7 +274,7 @@ export default function WebhooksPage() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="font-semibold text-green-400">
                       {log.payload?.amount || log.payload?.valor
-                        ? `R$ ${Number(log.payload?.amount || log.payload?.valor).toFixed(2)}`
+                        ? `R$ ${formatMoney(log.payload?.amount || log.payload?.valor)}`
                         : '-'}
                     </div>
                   </td>

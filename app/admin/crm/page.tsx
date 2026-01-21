@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { format, subDays, startOfDay, endOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { formatMoney } from '@/lib/format'
 
 // Etapas do funil de vendas
 const FUNIL_STAGES = [
@@ -433,7 +434,7 @@ export default function CRMPage() {
             <div>
               <p className="text-gray-400 text-sm">Valor Total</p>
               <p className="text-2xl font-black text-white">
-                R$ {leads.reduce((sum, l) => sum + (l.value || 0), 0).toFixed(0)}
+                R$ {formatMoney(leads.reduce((sum, l) => sum + (l.value || 0), 0))}
               </p>
             </div>
           </div>
@@ -487,7 +488,7 @@ export default function CRMPage() {
                           <h4 className="font-bold text-white text-sm">{lead.name}</h4>
                           {lead.value && (
                             <span className="text-brand-400 font-bold text-sm">
-                              R$ {lead.value.toFixed(0)}
+                              R$ {formatMoney(lead.value)}
                             </span>
                           )}
                         </div>
@@ -578,7 +579,7 @@ export default function CRMPage() {
                 {selectedLead.value && (
                   <div>
                     <label className="block text-sm font-semibold text-gray-400 mb-1">Valor</label>
-                    <p className="text-brand-400 font-black text-2xl">R$ {selectedLead.value.toFixed(2)}</p>
+                    <p className="text-brand-400 font-black text-2xl">R$ {formatMoney(selectedLead.value)}</p>
                   </div>
                 )}
 

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { ShoppingCart, Mail, Phone, DollarSign, Calendar, MessageCircle, CheckCircle, XCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { formatMoney } from '@/lib/format'
 
 interface AbandonedCart {
   id: string
@@ -77,7 +78,7 @@ export default function AbandonedCartsPage() {
   function sendWhatsApp(cart: AbandonedCart) {
     const phone = cart.customer_phone.replace(/\D/g, '')
     const name = cart.customer_name || 'Olá'
-    const value = cart.cart_value ? `R$ ${cart.cart_value.toFixed(2)}` : ''
+    const value = cart.cart_value ? `R$ ${formatMoney(cart.cart_value)}` : ''
     
     const message = encodeURIComponent(
       `Olá ${name}! 👋\n\n` +
@@ -166,7 +167,7 @@ export default function AbandonedCartsPage() {
             <div>
               <p className="text-sm text-gray-400">Receita Perdida</p>
               <p className="text-2xl font-bold text-white">
-                R$ {stats.lostRevenue.toFixed(2)}
+                R$ {formatMoney(stats.lostRevenue)}
               </p>
             </div>
           </div>
@@ -257,7 +258,7 @@ export default function AbandonedCartsPage() {
                   <div className="flex flex-wrap gap-4 text-sm text-gray-300">
                     <div className="flex items-center gap-2">
                       <DollarSign className="w-4 h-4" />
-                      <span className="font-semibold">R$ {cart.cart_value?.toFixed(2) || '0.00'}</span>
+                      <span className="font-semibold">R$ {formatMoney(cart.cart_value)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Calendar className="w-4 h-4" />
