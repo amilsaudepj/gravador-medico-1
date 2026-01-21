@@ -19,7 +19,8 @@ import {
   TrendingUp,
   ShoppingBag,
   CheckCircle2,
-  Clock
+  Clock,
+  HeartPulse
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -38,6 +39,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     abandonedCarts: 0,
     pendingOrders: 0,
     approvedOrders: 0,
+    recoveryPending: 0,
   })
 
   // Verificar autenticação e role de admin
@@ -94,10 +96,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .eq('status', 'approved')
         .gte('created_at', yesterday.toISOString())
       
+      // Checkouts pendentes de recuperação
+      const { count: recoveryCount } = await supabase
+        .from('checkout_attempts')
+        .select('*', { count: 'exact', head: true })
+        .in('recovery_status', ['pending', 'abandoned'])
+      
       setNotifications({
         abandonedCarts: abandonedCount || 0,
         pendingOrders: pendingCount || 0,
         approvedOrders: approvedCount || 0,
+        recoveryPending: recoveryCount || 0,
       })
     } catch (error) {
       console.error('Erro ao buscar notificações:', error)
@@ -188,6 +197,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       label: 'Carrinhos Abandonados', 
       href: '/admin/abandoned-carts',
       badge: null
+    },
+    { 
+      icon: HeartPulse, 
+      label: 'Sala de Recuperação', 
+      href: '/admin/recovery',
+      badge: notifications.recoveryPending > 0 ? notifications.recoveryPending : null
     },
     { 
       icon: Users, 
