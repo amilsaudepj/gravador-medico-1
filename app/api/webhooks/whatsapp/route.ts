@@ -10,9 +10,17 @@ import { upsertWhatsAppMessage, upsertWhatsAppContact, messageExists } from '@/l
 import type { EvolutionMessagePayload, CreateMessageInput } from '@/lib/types/whatsapp'
 
 /**
- * Busca a foto de perfil do contato na Evolution API
+ * Busca a foto de perfil do contato com estratégia de fallback
+ * 
+ * ESTRATÉGIA:
+ * 1. Tenta extrair do próprio payload da mensagem (às vezes a Evolution envia)
+ * 2. Tenta buscar via GET /chat/findContacts/{instance}?where[remoteJid]=xxx
+ * 3. Se falhar tudo, retorna null (não trava o processo)
  */
-async function fetchProfilePicture(remoteJid: string): Promise<string | null> {
+async function fetchProfilePicture(
+  remoteJid: string, 
+  messagePayload?: any
+): Promise<string | null> {
   try {
     const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL
     const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY
@@ -23,10 +31,30 @@ async function fetchProfilePicture(remoteJid: string): Promise<string | null> {
       return null
     }
 
-    // Endpoint correto: GET /chat/findContact/{instance}
-    const url = `${EVOLUTION_API_URL}/chat/findContact/${EVOLUTION_INSTANCE_NAME}?number=${encodeURIComponent(remoteJid)}`
+    // ================================================================
+    // ESTRATÉGIA 1: Verificar se a foto já vem no payload da mensagem
+    // ================================================================
+    if (messagePayload) {
+      const photoFromPayload = 
+        messagePayload.profilePictureUrl ||
+        messagePayload.profilePicUrl ||
+        messagePayload.picture ||
+        messagePayload.imgUrl ||
+        (messagePayload.pushName && messagePayload.profilePicture) ||
+        null
+
+      if (photoFromPayload) {
+        console.log(`✅ Foto encontrada no payload da mensagem: ${photoFromPayload}`)
+        return photoFromPayload
+      }
+    }
+
+    // ================================================================
+    // ESTRATÉGIA 2: Buscar via endpoint findContacts (ÚNICO que funciona)
+    // ================================================================
+    const url = `${EVOLUTION_API_URL}/chat/findContacts/${EVOLUTION_INSTANCE_NAME}?where[remoteJid]=${encodeURIComponent(remoteJid)}`
     
-    console.log(`📸 Buscando foto de perfil em: ${url}`)
+    console.log(`📸 Buscando foto via findContacts: ${url}`)
     
     const response = await fetch(url, {
       method: 'GET',
@@ -36,33 +64,36 @@ async function fetchProfilePicture(remoteJid: string): Promise<string | null> {
     })
 
     if (!response.ok) {
-      console.warn(`⚠️ Erro HTTP ${response.status} ao buscar foto de perfil para ${remoteJid}`)
+      console.warn(`⚠️ Erro HTTP ${response.status} ao buscar contatos para ${remoteJid}`)
       return null
     }
 
     const data = await response.json()
     
-    console.log(`📸 Resposta da API:`, JSON.stringify(data, null, 2))
+    console.log(`📸 Resposta findContacts:`, JSON.stringify(data, null, 2))
     
-    // Evolution API pode retornar diferentes estruturas
-    // Tentar vários formatos possíveis
-    const photoUrl = 
-      data.profilePictureUrl || 
-      data.profilePicUrl || 
-      data.picture || 
-      data.imgUrl ||
-      (data.contact && data.contact.profilePictureUrl) ||
-      null
+    // A resposta pode ser um array de contatos
+    const contacts = Array.isArray(data) ? data : [data]
+    
+    for (const contact of contacts) {
+      const photoUrl = 
+        contact.profilePictureUrl || 
+        contact.profilePicUrl || 
+        contact.picture || 
+        contact.imgUrl ||
+        null
 
-    if (photoUrl) {
-      console.log(`✅ Foto de perfil encontrada: ${photoUrl}`)
-      return photoUrl
+      if (photoUrl) {
+        console.log(`✅ Foto de perfil encontrada via findContacts: ${photoUrl}`)
+        return photoUrl
+      }
     }
 
-    console.log(`⚠️ Nenhuma foto de perfil encontrada na resposta`)
+    console.log(`⚠️ Nenhuma foto de perfil encontrada - salvando como null`)
     return null
+    
   } catch (error) {
-    console.error('❌ Erro ao buscar foto de perfil:', error)
+    console.error('❌ Erro ao buscar foto de perfil (não crítico):', error)
     return null
   }
 }
@@ -174,9 +205,10 @@ export async function POST(request: NextRequest) {
 
     // ================================================================
     // PASSO 1: Buscar foto de perfil do contato
+    // Estratégia: 1) Tentar no payload, 2) Buscar via API, 3) null
     // ================================================================
-    console.log('📸 Buscando foto de perfil...')
-    const profilePictureUrl = await fetchProfilePicture(key.remoteJid)
+    console.log('📸 Buscando foto de perfil com fallback...')
+    const profilePictureUrl = await fetchProfilePicture(key.remoteJid, payload.data)
 
     // ================================================================
     // PASSO 2: UPSERT do contato PRIMEIRO (resolver FK constraint)
