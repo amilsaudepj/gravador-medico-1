@@ -1,81 +1,40 @@
 /**
  * =============================================
- * UTILITÁRIO DE DATAS E BUSCA DE VENDAS
+ * UTILITÁRIO DE VENDAS - SIMPLIFICADO
  * =============================================
- * Centraliza lógica de normalização de datas UTC
- * e busca de vendas com fallback automático
+ * Busca vendas da tabela correta (checkout_attempts)
+ * Usa coluna correta (total_amount)
  * =============================================
  */
 
-import { supabase } from './supabase'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 /**
- * Normaliza datas para UTC Start/End of day
- * Evita problemas de timezone
- */
-export function normalizeUTCDates(startDate: string, endDate: string) {
-  const startIso = `${startDate}T00:00:00.000Z`
-  const endIso = `${endDate}T23:59:59.999Z`
-  
-  return { startIso, endIso }
-}
-
-/**
- * Busca vendas com filtro de data E fallback automático
- * Se o filtro retornar vazio OU falhar, busca todas as vendas
- * ATUALIZADO: Usa checkout_attempts ao invés de sales
+ * Função legada consertada para usar a nova estrutura
+ * Usado por páginas antigas que ainda não foram migradas para dashboard-queries.ts
  */
 export async function fetchSalesWithFallback(
-  startDate: string,
-  endDate: string,
-  options: {
-    limit?: number
-    orderBy?: 'created_at' | 'updated_at'
-    orderDirection?: 'asc' | 'desc'
-  } = {}
+  supabase: SupabaseClient,
+  startDate: Date,
+  endDate: Date
 ) {
-  const { limit, orderBy = 'created_at', orderDirection = 'desc' } = options
-  const { startIso, endIso } = normalizeUTCDates(startDate, endDate)
-  
-  console.log('📅 Buscando vendas:', { startDate, endDate, startIso, endIso })
-  
-  // Tentativa 1: Buscar com filtro de data na tabela correta
-  let query = supabase
-    .from('checkout_attempts')
-    .select('*')
-    .gte('created_at', startIso)
-    .lte('created_at', endIso)
-    .order(orderBy, { ascending: orderDirection === 'asc' })
-  
-  if (limit) {
-    query = query.limit(limit)
-  }
-  
-  const { data: filteredSales, error } = await query
-  
-  // Se falhou OU retornou vazio, fazer fallback
-  if (error || !filteredSales || filteredSales.length === 0) {
-    console.warn('⚠️ Filtro de data falhou ou retornou vazio. Usando fallback (todas as vendas)')
-    
-    const fallbackQuery = supabase
+  try {
+    // Agora busca 'total_amount' em vez de 'amount' ou 'cart_value'
+    const { data, error } = await supabase
       .from('checkout_attempts')
       .select('*')
-      .order(orderBy, { ascending: orderDirection === 'asc' })
-      .limit(limit || 100) // Limitar fallback para evitar overload
-    
-    const { data: fallbackSales, error: fallbackError } = await fallbackQuery
-    
-    if (fallbackError) {
-      console.error('❌ Erro no fallback:', fallbackError)
-      return { data: [], error: fallbackError, usedFallback: true }
-    }
-    
-    console.log('✅ Fallback retornou:', fallbackSales?.length || 0, 'vendas')
-    return { data: fallbackSales || [], error: null, usedFallback: true }
+      .gte('created_at', startDate.toISOString())
+      .lte('created_at', endDate.toISOString())
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+
+    console.log('✅ Vendas encontradas:', data?.length || 0)
+    return data || []
+  } catch (error) {
+    console.error('❌ Erro ao buscar vendas (salesUtils):', error)
+    return [] // Retorna vazio em vez de mock para evitar confusão
   }
-  
-  console.log('✅ Filtro retornou:', filteredSales.length, 'vendas')
-  return { data: filteredSales, error: null, usedFallback: false }
 }
 
 /**
@@ -96,13 +55,13 @@ export function calculateSalesMetrics(sales: any[]) {
   const approvedSales = filterApprovedSales(sales)
   
   const totalRevenue = approvedSales.reduce(
-    (sum, s) => sum + Number(s.final_amount || s.total_amount || 0), 
+    (sum, s) => sum + Number(s.total_amount || 0), 
     0
   )
   
   const totalOrders = approvedSales.length
   
-  const uniqueEmails = new Set(approvedSales.map(s => s.customer_email))
+  const uniqueEmails = new Set(approvedSales.map(s => s.customer_email).filter(Boolean))
   const totalCustomers = uniqueEmails.size
   
   const averageTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0
@@ -127,18 +86,10 @@ export function calculateGrowth(current: number, previous: number): number {
 }
 
 /**
- * Formata valor monetário BRL
+ * Helpers de formatação
  */
-export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(value)
-}
+export const formatCurrency = (value: number) => 
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
-/**
- * Formata porcentagem
- */
-export function formatPercentage(value: number, decimals: number = 1): string {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(decimals)}%`
-}
+export const formatPercentage = (value: number) => 
+  `${value.toFixed(1)}%`
