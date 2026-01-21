@@ -82,17 +82,36 @@ export default function ProductsPage() {
         return
       }
 
+      console.log('📦 Produtos encontrados:', productsData?.length)
+
       // Buscar performance de cada produto via view
-      const { data: performanceData } = await supabase
+      const { data: performanceData, error: perfError } = await supabase
         .from('product_performance')
         .select('*')
+
+      if (perfError) {
+        console.error('⚠️ Erro ao carregar performance (pode ser normal se não tiver vendas):', perfError)
+      } else {
+        console.log('📊 Performance encontrada:', performanceData?.length)
+      }
 
       // Combinar dados
       const productsWithPerformance = (productsData || []).map(product => {
         const perf = performanceData?.find(p => p.product_name === product.name)
+        if (!perf) {
+          console.log(`ℹ️ Produto sem vendas: ${product.name}`)
+        }
         return {
           ...product,
-          performance: perf || null
+          performance: perf || {
+            total_sales: 0,
+            total_revenue: 0,
+            refund_rate: 0,
+            conversion_rate: 0,
+            health_score: 0,
+            unique_customers: 0,
+            last_sale_at: null
+          }
         }
       })
 
@@ -186,19 +205,21 @@ export default function ProductsPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-2xl shadow-xl p-6 border ${
+      className={`rounded-xl border p-6 ${
         highlight 
-          ? 'bg-gradient-to-br border-opacity-30' 
-          : 'bg-gray-800/50 backdrop-blur-sm border-gray-700/50'
-      } ${color}`}
+          ? `${color} border-opacity-20` 
+          : 'bg-slate-900/40 border-slate-800/50'
+      }`}
     >
       <div className="flex items-center gap-4">
-        <div className={`w-12 h-12 rounded-xl ${highlight ? 'bg-white/10' : 'bg-gradient-to-br'} ${!highlight && color} flex items-center justify-center`}>
-          <Icon className="w-6 h-6 text-white" />
+        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+          highlight ? 'bg-white/5' : color
+        }`}>
+          <Icon className={`w-5 h-5 ${highlight ? 'text-white' : ''}`} />
         </div>
         <div>
-          <p className="text-gray-300 text-sm font-medium">{title}</p>
-          <p className={`text-2xl font-bold ${highlight ? 'text-white' : 'text-white'}`}>
+          <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">{title}</p>
+          <p className="text-white text-2xl font-bold mt-1">
             {prefix}{typeof value === 'number' ? value.toLocaleString('pt-BR', {
               minimumFractionDigits: prefix === 'R$ ' ? 2 : 0,
               maximumFractionDigits: prefix === 'R$ ' ? 2 : 0,
@@ -225,23 +246,23 @@ export default function ProductsPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-black bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold text-white">
             Inteligência de Produtos
           </h1>
-          <p className="text-gray-400 mt-1">Performance e saúde financeira por SKU</p>
+          <p className="text-slate-400 mt-1">Performance e saúde financeira por SKU</p>
         </div>
         
         <ProductSyncButton onSyncComplete={loadProducts} />
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Produto Mais Vendido */}
         <MetricCard
           title="🏆 Mais Vendido"
           value={bestProduct?.name?.substring(0, 20) || '-'}
           icon={TrendingUp}
-          color="from-green-500 to-emerald-600"
+          color="bg-emerald-500/10"
           highlight
         />
 
@@ -250,7 +271,7 @@ export default function ProductsPage() {
           title="⚠️ Maior Reembolso"
           value={`${worstProduct?.performance?.refund_rate?.toFixed(1) || '0'}%`}
           icon={AlertTriangle}
-          color="from-red-500 to-rose-600"
+          color="bg-red-500/10"
           highlight
         />
 
@@ -262,7 +283,7 @@ export default function ProductsPage() {
             : 0
           }
           icon={DollarSign}
-          color="from-blue-500 to-cyan-600"
+          color="text-blue-400"
           prefix="R$ "
         />
 
@@ -271,22 +292,22 @@ export default function ProductsPage() {
           title="📊 Health Score"
           value={`${stats?.avg_health_score || 0}/100`}
           icon={Package}
-          color="from-purple-500 to-fuchsia-600"
+          color="text-purple-400"
         />
       </div>
 
       {/* Filtros */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-700/50">
+      <div className="bg-slate-900/40 rounded-xl p-6 border border-slate-800/50">
         <div className="flex gap-4 flex-wrap">
           <div className="flex-1 min-w-[300px]">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 w-5 h-5" />
               <input
                 type="text"
                 placeholder="🔍 Buscar produto..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-800 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
               />
             </div>
           </div>
@@ -294,7 +315,7 @@ export default function ProductsPage() {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="px-4 py-3 bg-slate-900 border border-slate-800 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
           >
             <option value="all">Todas Categorias</option>
             <option value="subscription">Assinaturas</option>
