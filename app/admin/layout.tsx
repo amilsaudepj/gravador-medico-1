@@ -163,6 +163,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       badge: null
     },
     { 
+      icon: Clock, 
+      label: 'Sala de Recuperação', 
+      href: '/admin/recovery',
+      badge: null
+    },
+    { 
       icon: Users, 
       label: 'CRM', 
       href: '/admin/crm',
