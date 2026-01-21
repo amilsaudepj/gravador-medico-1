@@ -88,6 +88,18 @@ export default function BigNumbers({ metrics, loading }: BigNumbersProps) {
     return `${value.toFixed(1)}%`
   }
 
+  // Previne erro se metrics estiver null
+  if (!metrics) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <BigNumberCard title="Faturamento Bruto" value="R$ 0" delta={0} deltaText="vs últimos 30 dias" icon={<DollarSign className="w-5 h-5" />} loading={true} />
+        <BigNumberCard title="Ticket Médio (AOV)" value="R$ 0" delta={0} deltaText="vs período anterior" icon={<ShoppingCart className="w-5 h-5" />} loading={true} />
+        <BigNumberCard title="Taxa de Conversão" value="0.0%" delta={0} deltaText="visitantes → vendas" icon={<CreditCard className="w-5 h-5" />} loading={true} />
+        <BigNumberCard title="Total de Vendas" value="0" delta={0} deltaText="últimos 30 dias" icon={<Users className="w-5 h-5" />} loading={true} />
+      </div>
+    )
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <BigNumberCard
