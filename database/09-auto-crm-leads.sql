@@ -107,7 +107,6 @@ BEGIN
     INSERT INTO crm_leads (
       name,
       email,
-      phone,
       stage,
       value,
       source,
@@ -119,7 +118,6 @@ BEGIN
     ) VALUES (
       NEW.customer_name,
       NEW.customer_email,
-      NEW.customer_phone,
       'won',
       NEW.total_amount,
       'Checkout - Venda Direta',
@@ -227,7 +225,7 @@ INSERT INTO crm_leads (
 SELECT DISTINCT ON (customer_email)
   customer_name,
   customer_email,
-  customer_phone,
+  NULL as phone, -- sales não tem customer_phone no schema atual
   CASE 
     WHEN status IN ('approved', 'paid') THEN 'won'
     WHEN status = 'pending' THEN 'proposal'
