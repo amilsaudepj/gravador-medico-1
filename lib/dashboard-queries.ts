@@ -421,3 +421,92 @@ export async function fetchConversionFunnel(
     }
   }
 }
+
+// ========================================
+// 6. FETCH: Gráfico de Vendas (Últimos 30 dias)
+// ========================================
+/**
+ * Busca dados para o gráfico principal do dashboard
+ * Agrupa vendas por dia dos últimos 30 dias
+ */
+export async function fetchSalesChartData(
+  supabase: SupabaseClient,
+  days: number = 30
+): Promise<{ data: any[]; error: any }> {
+  try {
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+    
+    const { data, error } = await supabase
+      .from('checkout_attempts')
+      .select('created_at, total_amount, status')
+      .gte('created_at', startDate)
+      .in('status', ['paid', 'approved', 'completed'])
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('❌ Erro ao buscar dados do gráfico:', error)
+      return { data: [], error }
+    }
+
+    if (!data || data.length === 0) {
+      console.warn('⚠️ Nenhuma venda encontrada para o gráfico')
+      return { data: [], error: null }
+    }
+
+    // Agrupa por dia no JavaScript (eficiente para 30 dias)
+    const grouped = data.reduce((acc: any, curr) => {
+      const date = new Date(curr.created_at).toLocaleDateString('pt-BR')
+      if (!acc[date]) {
+        acc[date] = { 
+          date, 
+          amount: 0, 
+          sales: 0 
+        }
+      }
+      acc[date].amount += Number(curr.total_amount || 0)
+      acc[date].sales += 1
+      return acc
+    }, {})
+
+    const chartData = Object.values(grouped)
+    console.log('📊 Dados do gráfico:', chartData.length, 'dias')
+    
+    return { data: chartData, error: null }
+  } catch (error) {
+    console.error('❌ Exceção ao buscar dados do gráfico:', error)
+    return { data: [], error }
+  }
+}
+
+// ========================================
+// 7. FETCH: Funil para Dashboard (formato array)
+// ========================================
+/**
+ * Retorna dados do funil em formato de array para gráficos
+ */
+export async function fetchFunnelData(
+  supabase: SupabaseClient
+): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('analytics_funnel')
+      .select('*')
+      .single()
+
+    if (error || !data) {
+      console.warn('⚠️ Dados do funil não encontrados')
+      return []
+    }
+
+    return [
+      { name: 'Visitantes', value: data.step_visitors || 0, fill: '#3b82f6' },
+      { name: 'Interessados', value: data.step_interested || 0, fill: '#8b5cf6' },
+      { name: 'Checkout', value: data.step_checkout_started || 0, fill: '#f59e0b' },
+      { name: 'Vendas', value: data.step_purchased || 0, fill: '#10b981' },
+    ]
+  } catch (error) {
+    console.error('❌ Erro ao buscar funil:', error)
+    return []
+  }
+}
+

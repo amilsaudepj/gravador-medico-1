@@ -23,6 +23,7 @@ export function normalizeUTCDates(startDate: string, endDate: string) {
 /**
  * Busca vendas com filtro de data E fallback automático
  * Se o filtro retornar vazio OU falhar, busca todas as vendas
+ * ATUALIZADO: Usa checkout_attempts ao invés de sales
  */
 export async function fetchSalesWithFallback(
   startDate: string,
@@ -38,9 +39,9 @@ export async function fetchSalesWithFallback(
   
   console.log('📅 Buscando vendas:', { startDate, endDate, startIso, endIso })
   
-  // Tentativa 1: Buscar com filtro de data
+  // Tentativa 1: Buscar com filtro de data na tabela correta
   let query = supabase
-    .from('sales')
+    .from('checkout_attempts')
     .select('*')
     .gte('created_at', startIso)
     .lte('created_at', endIso)
@@ -57,7 +58,7 @@ export async function fetchSalesWithFallback(
     console.warn('⚠️ Filtro de data falhou ou retornou vazio. Usando fallback (todas as vendas)')
     
     const fallbackQuery = supabase
-      .from('sales')
+      .from('checkout_attempts')
       .select('*')
       .order(orderBy, { ascending: orderDirection === 'asc' })
       .limit(limit || 100) // Limitar fallback para evitar overload
