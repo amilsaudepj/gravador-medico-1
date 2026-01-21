@@ -97,7 +97,7 @@ export default function AnalyticsPage() {
     if (data) setOnlineVisitors(data.online_count || 0)
   }
 
-  if (loading) {
+  if (loading || !health) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black p-8 flex items-center justify-center">
         <div className="text-center">
@@ -109,10 +109,10 @@ export default function AnalyticsPage() {
   }
 
   const funnelChartData = funnel ? [
-    { name: 'Visitantes', value: funnel.step_visitors, fill: '#8B5CF6' },
-    { name: 'Interessados', value: funnel.step_interested, fill: '#06B6D4' },
-    { name: 'Checkout', value: funnel.step_checkout_started, fill: '#10B981' },
-    { name: 'Compraram', value: funnel.step_purchased, fill: '#F59E0B' },
+    { name: 'Visitantes', value: funnel.step_visitors || 0, fill: '#8B5CF6' },
+    { name: 'Interessados', value: funnel.step_interested || 0, fill: '#06B6D4' },
+    { name: 'Checkout', value: funnel.step_checkout_started || 0, fill: '#10B981' },
+    { name: 'Compraram', value: funnel.step_purchased || 0, fill: '#F59E0B' },
   ] : []
 
   return (
@@ -145,45 +145,43 @@ export default function AnalyticsPage() {
         </div>
 
         {/* KPIs de Saúde */}
-        {health && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <MetricCard
-              icon={<Users className="w-6 h-6" />}
-              label="Visitantes"
-              value={health.unique_visitors.toLocaleString()}
-              change={health.visitors_change}
-              color="purple"
-            />
-            <MetricCard
-              icon={<DollarSign className="w-6 h-6" />}
-              label="Receita"
-              value={`R$ ${(health.revenue / 1000).toFixed(1)}k`}
-              change={health.revenue_change}
-              color="green"
-            />
-            <MetricCard
-              icon={<Target className="w-6 h-6" />}
-              label="Conversão"
-              value={`${health.conversion_rate}%`}
-              change={0}
-              color="cyan"
-            />
-            <MetricCard
-              icon={<TrendingUp className="w-6 h-6" />}
-              label="Ticket Médio"
-              value={`R$ ${health.average_order_value.toFixed(0)}`}
-              change={health.aov_change}
-              color="orange"
-            />
-            <MetricCard
-              icon={<Clock className="w-6 h-6" />}
-              label="Tempo Médio"
-              value={`${Math.round(health.avg_time_seconds / 60)}m`}
-              change={health.time_change}
-              color="blue"
-            />
-          </div>
-        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <MetricCard
+            icon={<Users className="w-6 h-6" />}
+            label="Visitantes"
+            value={(health?.unique_visitors || 0).toLocaleString()}
+            change={health?.visitors_change || 0}
+            color="purple"
+          />
+          <MetricCard
+            icon={<DollarSign className="w-6 h-6" />}
+            label="Receita"
+            value={`R$ ${((health?.revenue || 0) / 1000).toFixed(1)}k`}
+            change={health?.revenue_change || 0}
+            color="green"
+          />
+          <MetricCard
+            icon={<Target className="w-6 h-6" />}
+            label="Conversão"
+            value={`${(health?.conversion_rate || 0).toFixed(1)}%`}
+            change={0}
+            color="cyan"
+          />
+          <MetricCard
+            icon={<TrendingUp className="w-6 h-6" />}
+            label="Ticket Médio"
+            value={`R$ ${(health?.average_order_value || 0).toFixed(0)}`}
+            change={health?.aov_change || 0}
+            color="orange"
+          />
+          <MetricCard
+            icon={<Clock className="w-6 h-6" />}
+            label="Tempo Médio"
+            value={`${Math.round((health?.avg_time_seconds || 0) / 60)}m`}
+            change={health?.time_change || 0}
+            color="blue"
+          />
+        </div>
 
         {/* Funil de Conversão */}
         {funnel && (
@@ -209,26 +207,26 @@ export default function AnalyticsPage() {
               <div className="space-y-4">
                 <FunnelStep 
                   label="Visitantes" 
-                  value={funnel.step_visitors} 
+                  value={funnel?.step_visitors || 0} 
                   percentage={100}
                   color="purple"
                 />
                 <FunnelStep 
                   label="Interessados (Pricing/Checkout)" 
-                  value={funnel.step_interested} 
-                  percentage={(funnel.step_interested / funnel.step_visitors) * 100}
+                  value={funnel?.step_interested || 0} 
+                  percentage={funnel?.step_visitors ? ((funnel.step_interested || 0) / funnel.step_visitors) * 100 : 0}
                   color="cyan"
                 />
                 <FunnelStep 
                   label="Iniciaram Checkout" 
-                  value={funnel.step_checkout_started} 
-                  percentage={(funnel.step_checkout_started / funnel.step_visitors) * 100}
+                  value={funnel?.step_checkout_started || 0} 
+                  percentage={funnel?.step_visitors ? ((funnel.step_checkout_started || 0) / funnel.step_visitors) * 100 : 0}
                   color="green"
                 />
                 <FunnelStep 
                   label="Compraram" 
-                  value={funnel.step_purchased} 
-                  percentage={(funnel.step_purchased / funnel.step_visitors) * 100}
+                  value={funnel?.step_purchased || 0} 
+                  percentage={funnel?.step_visitors ? ((funnel.step_purchased || 0) / funnel.step_visitors) * 100 : 0}
                   color="orange"
                 />
               </div>
@@ -273,20 +271,20 @@ export default function AnalyticsPage() {
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-400">{row.campaign}</td>
                     <td className="py-3 px-4 text-right text-white">{row.visitors.toLocaleString()}</td>
-                    <td className="py-3 px-4 text-right text-white font-semibold">{row.sales_count}</td>
+                    <td className="py-3 px-4 text-right text-white font-semibold">{row.sales_count || 0}</td>
                     <td className="py-3 px-4 text-right text-green-400 font-bold">
-                      R$ {(row.total_revenue / 1000).toFixed(1)}k
+                      R$ {((row.total_revenue || 0) / 1000).toFixed(1)}k
                     </td>
                     <td className="py-3 px-4 text-right">
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        row.conversion_rate >= 5 ? 'bg-green-500/20 text-green-400' :
-                        row.conversion_rate >= 2 ? 'bg-yellow-500/20 text-yellow-400' :
+                        (row.conversion_rate || 0) >= 5 ? 'bg-green-500/20 text-green-400' :
+                        (row.conversion_rate || 0) >= 2 ? 'bg-yellow-500/20 text-yellow-400' :
                         'bg-red-500/20 text-red-400'
                       }`}>
-                        {row.conversion_rate.toFixed(1)}%
+                        {(row.conversion_rate || 0).toFixed(1)}%
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right text-white">R$ {row.average_order_value.toFixed(0)}</td>
+                    <td className="py-3 px-4 text-right text-white">R$ {(row.average_order_value || 0).toFixed(0)}</td>
                     <td className="py-3 px-4 text-center">
                       <span className="px-2 py-1 rounded-full text-xs bg-gray-800 text-gray-300">
                         {row.primary_device}

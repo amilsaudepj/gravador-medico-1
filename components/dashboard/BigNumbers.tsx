@@ -42,7 +42,7 @@ function BigNumberCard({ title, value, delta, deltaText, icon, loading }: BigNum
       </div>
       
       <div className="flex items-center gap-1.5">
-        {!isNeutral && (
+        {!isNeutral && delta !== undefined && delta !== null && (
           <div className={`flex items-center gap-0.5 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
             {isPositive ? (
               <TrendingUp className="w-4 h-4" />
@@ -50,7 +50,7 @@ function BigNumberCard({ title, value, delta, deltaText, icon, loading }: BigNum
               <TrendingDown className="w-4 h-4" />
             )}
             <span className="text-sm font-semibold">
-              {isPositive ? '+' : ''}{delta.toFixed(1)}%
+              {isPositive ? '+' : ''}{Math.abs(delta).toFixed(1)}%
             </span>
           </div>
         )}

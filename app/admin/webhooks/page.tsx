@@ -56,6 +56,11 @@ export default function WebhooksPage() {
   }
 
   const filterLogs = () => {
+    if (!logs || logs.length === 0) {
+      setFilteredLogs([])
+      return
+    }
+
     let filtered = [...logs]
 
     // Filtrar por tipo de evento
@@ -68,9 +73,9 @@ export default function WebhooksPage() {
       const term = searchTerm.toLowerCase()
       filtered = filtered.filter(
         (log) =>
-          log.event_type.toLowerCase().includes(term) ||
-          log.ip_address?.toLowerCase().includes(term) ||
-          JSON.stringify(log.payload).toLowerCase().includes(term)
+          (log.event_type || '').toLowerCase().includes(term) ||
+          (log.ip_address || '').toLowerCase().includes(term) ||
+          JSON.stringify(log.payload || {}).toLowerCase().includes(term)
       )
     }
 
@@ -78,7 +83,8 @@ export default function WebhooksPage() {
   }
 
   const getEventTypes = () => {
-    const types = new Set(logs.map((log) => log.event_type))
+    if (!logs || logs.length === 0) return []
+    const types = new Set(logs.map((log) => log.event_type).filter(Boolean))
     return Array.from(types)
   }
 
@@ -160,7 +166,7 @@ export default function WebhooksPage() {
             <h3 className="text-gray-400 text-sm font-semibold">Aprovados</h3>
           </div>
           <p className="text-3xl font-black text-white">
-            {logs.filter((l) => l.event_type.includes('approved') || l.event_type.includes('paid')).length}
+            {(logs || []).filter((l) => (l.event_type || '').includes('approved') || (l.event_type || '').includes('paid')).length}
           </p>
         </motion.div>
 
@@ -177,7 +183,8 @@ export default function WebhooksPage() {
             <h3 className="text-gray-400 text-sm font-semibold">Hoje</h3>
           </div>
           <p className="text-3xl font-black text-white">
-            {logs.filter((l) => {
+            {(logs || []).filter((l) => {
+              if (!l.created_at) return false
               const logDate = format(new Date(l.created_at), 'dd/MM/yyyy')
               const today = format(new Date(), 'dd/MM/yyyy')
               return logDate === today

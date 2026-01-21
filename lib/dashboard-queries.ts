@@ -225,12 +225,43 @@ export async function fetchDashboardMetrics(
       .select('*')
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('❌ Erro ao buscar métricas do dashboard:', error)
+      return {
+        data: {
+          unique_visitors: 0,
+          sales: 0,
+          revenue: 0,
+          average_order_value: 0,
+          avg_time_seconds: 0,
+          conversion_rate: 0,
+          visitors_change: 0,
+          revenue_change: 0,
+          aov_change: 0,
+          time_change: 0
+        },
+        error
+      }
+    }
 
     return { data, error: null }
   } catch (error) {
-    console.error('❌ Erro ao buscar métricas do dashboard:', error)
-    throw error // Lança o erro ao invés de retornar dados falsos
+    console.error('❌ Exceção ao buscar métricas do dashboard:', error)
+    return {
+      data: {
+        unique_visitors: 0,
+        sales: 0,
+        revenue: 0,
+        average_order_value: 0,
+        avg_time_seconds: 0,
+        conversion_rate: 0,
+        visitors_change: 0,
+        revenue_change: 0,
+        aov_change: 0,
+        time_change: 0
+      },
+      error
+    }
   }
 }
 
@@ -252,12 +283,15 @@ export async function fetchTopProducts(
       .order('total_revenue', { ascending: false })
       .limit(limit)
 
-    if (error) throw error
+    if (error) {
+      console.error('❌ Erro ao buscar top produtos:', error)
+      return { data: [], error }
+    }
 
     return { data: data || [], error: null }
   } catch (error) {
-    console.error('❌ Erro ao buscar top produtos:', error)
-    throw error
+    console.error('❌ Exceção ao buscar top produtos:', error)
+    return { data: [], error }
   }
 }
 
@@ -279,12 +313,15 @@ export async function fetchSalesBySource(
       .order('total_revenue', { ascending: false })
       .limit(limit)
 
-    if (error) throw error
+    if (error) {
+      console.error('❌ Erro ao buscar vendas por fonte:', error)
+      return { data: [], error }
+    }
 
     return { data: data || [], error: null }
   } catch (error) {
-    console.error('❌ Erro ao buscar vendas por fonte:', error)
-    throw error
+    console.error('❌ Exceção ao buscar vendas por fonte:', error)
+    return { data: [], error }
   }
 }
 
@@ -314,12 +351,31 @@ export async function fetchVisitorsOnline(
       .select('*')
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('❌ Erro ao buscar visitantes online:', error)
+      return { 
+        data: { 
+          online_count: 0, 
+          mobile_count: 0, 
+          desktop_count: 0,
+          tablet_count: 0
+        }, 
+        error 
+      }
+    }
 
     return { data, error: null }
   } catch (error) {
-    console.error('❌ Erro ao buscar visitantes online:', error)
-    throw error
+    console.error('❌ Exceção ao buscar visitantes online:', error)
+    return { 
+      data: { 
+        online_count: 0, 
+        mobile_count: 0, 
+        desktop_count: 0,
+        tablet_count: 0
+      }, 
+      error 
+    }
   }
 }
 
@@ -338,11 +394,30 @@ export async function fetchConversionFunnel(
       .select('*')
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('❌ Erro ao buscar funil de conversão:', error)
+      return { 
+        data: {
+          step_visitors: 0,
+          step_interested: 0,
+          step_checkout_started: 0,
+          step_purchased: 0
+        }, 
+        error 
+      }
+    }
 
     return { data, error: null }
   } catch (error) {
-    console.error('❌ Erro ao buscar funil de conversão:', error)
-    throw error
+    console.error('❌ Exceção ao buscar funil de conversão:', error)
+    return { 
+      data: {
+        step_visitors: 0,
+        step_interested: 0,
+        step_checkout_started: 0,
+        step_purchased: 0
+      }, 
+      error 
+    }
   }
 }
