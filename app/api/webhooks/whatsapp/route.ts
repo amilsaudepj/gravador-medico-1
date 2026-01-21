@@ -12,9 +12,9 @@ import type { EvolutionMessagePayload, CreateMessageInput } from '@/lib/types/wh
 /**
  * Busca a foto de perfil do contato com estratégia de fallback robusta
  * 
- * ESTRATÉGIA DEFINITIVA (após testes com curl):
+ * ESTRATÉGIA DEFINITIVA (após múltiplos testes):
  * 1. Tenta extrair do próprio payload da mensagem (às vezes a Evolution envia)
- * 2. Tenta buscar via GET /chat/findContacts/{instance}?where[remoteJid]=xxx
+ * 2. Tenta buscar via POST /contact/checkNumbers (MAIS ROBUSTO na v2)
  * 3. Se qualquer erro ocorrer, retorna null e NÃO TRAVA o processo
  * 
  * IMPORTANTE: A mensagem SEMPRE será salva, mesmo sem foto
@@ -30,7 +30,7 @@ async function fetchProfilePicture(
     const EVOLUTION_INSTANCE_NAME = process.env.EVOLUTION_INSTANCE_NAME
 
     if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE_NAME) {
-      console.warn('⚠️ Variáveis de ambiente Evolution API não configuradas - salvando sem foto')
+      console.warn('⚠️ [FOTO] Variáveis de ambiente não configuradas - salvando sem foto')
       return null
     }
 
@@ -53,62 +53,67 @@ async function fetchProfilePicture(
     }
 
     // ================================================================
-    // ESTRATÉGIA 2: Buscar via /chat/findContacts (ÚNICO endpoint que funciona)
-    // Confirmado via teste curl: fetchInstances funciona, findPicture dá 404
+    // ESTRATÉGIA 2: POST /contact/checkNumbers (MAIS ROBUSTO na v2)
+    // Extrai apenas o número (sem @s.whatsapp.net)
     // ================================================================
-    const url = `${EVOLUTION_API_URL}/chat/findContacts/${EVOLUTION_INSTANCE_NAME}?where[remoteJid]=${encodeURIComponent(remoteJid)}`
+    const phoneNumber = remoteJid.split('@')[0]
+    const url = `${EVOLUTION_API_URL}/contact/checkNumbers/${EVOLUTION_INSTANCE_NAME}`
     
-    console.log(`📸 [FOTO] Tentando buscar via findContacts: ${url}`)
+    console.log(`📸 [FOTO] Tentando POST /contact/checkNumbers`)
+    console.log(`📸 [FOTO] URL: ${url}`)
+    console.log(`📸 [FOTO] Numbers: [${phoneNumber}]`)
     
     // Timeout de 5 segundos para não travar o webhook
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
     
     const response = await fetch(url, {
-      method: 'GET',
+      method: 'POST',
       headers: {
         'apikey': EVOLUTION_API_KEY,
         'Content-Type': 'application/json'
       },
+      body: JSON.stringify({
+        numbers: [phoneNumber]
+      }),
       signal: controller.signal
     })
 
     clearTimeout(timeoutId)
 
     if (!response.ok) {
-      console.warn(`⚠️ [FOTO] HTTP ${response.status} - Salvando mensagem sem foto`)
+      console.warn(`⚠️ [FOTO] HTTP ${response.status} em checkNumbers - salvando sem foto`)
       return null
     }
 
     const data = await response.json()
     
-    console.log(`📸 [FOTO] Resposta recebida:`, JSON.stringify(data, null, 2))
+    console.log(`📸 [FOTO] Resposta checkNumbers:`, JSON.stringify(data, null, 2))
     
-    // A resposta pode ser um array de contatos ou objeto único
-    const contacts = Array.isArray(data) ? data : (data ? [data] : [])
+    // A resposta é um array. Pegue o primeiro item
+    const contacts = Array.isArray(data) ? data : []
     
     if (contacts.length === 0) {
-      console.log(`⚠️ [FOTO] Nenhum contato retornado - salvando sem foto`)
+      console.log(`⚠️ [FOTO] Array vazio retornado - salvando sem foto`)
       return null
     }
     
-    // Tentar múltiplos campos possíveis
-    for (const contact of contacts) {
-      const photoUrl = 
-        contact.profilePictureUrl || 
-        contact.profilePicUrl || 
-        contact.picture || 
-        contact.imgUrl ||
-        contact.image ||
-        null
+    // Extrair profilePicUrl do primeiro item
+    const firstContact = contacts[0]
+    const photoUrl = 
+      firstContact.profilePicUrl || 
+      firstContact.profilePictureUrl ||
+      firstContact.picture ||
+      firstContact.imgUrl ||
+      firstContact.image ||
+      null
 
-      if (photoUrl && typeof photoUrl === 'string') {
-        console.log(`✅ [FOTO] Encontrada via findContacts: ${photoUrl}`)
-        return photoUrl
-      }
+    if (photoUrl && typeof photoUrl === 'string') {
+      console.log(`✅ [FOTO] Encontrada via checkNumbers: ${photoUrl}`)
+      return photoUrl
     }
 
-    console.log(`⚠️ [FOTO] Contatos retornados mas sem campo de foto - salvando sem foto`)
+    console.log(`⚠️ [FOTO] Contato retornado mas sem campo profilePicUrl - salvando sem foto`)
     return null
     
   } catch (error) {

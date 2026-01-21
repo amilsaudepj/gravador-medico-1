@@ -1,113 +1,80 @@
-# 📸 Estratégia de Fallback para Fotos de Perfil - DEFINITIVA
+# 📸 Estratégia de Fallback para Fotos de Perfil - DEFINITIVA v3
 
-## 🔍 Problema Identificado (Confirmado via Teste cURL)
+## 🔍 Problema Identificado (Evolução dos Testes)
 
-Após testes com `curl` em todos os endpoints, confirmamos que **APENAS 2 endpoints funcionam**:
+### Histórico de Testes:
+1. **Primeira tentativa**: Endpoints `findPicture`, `fetchProfilePicture` → ❌ 404
+2. **Segunda tentativa**: `GET /chat/findContacts` → ❌ 404  
+3. **Solução DEFINITIVA**: `POST /contact/checkNumbers` → ✅ **FUNCIONA!**
 
-### ✅ Endpoints Funcionais:
-- `GET /instance/fetchInstances` - Status da instância
-- `GET /chat/findContacts/{instance}?where[remoteJid]=xxx` - **Buscar contatos (USAR ESTE!)**
+### ✅ Endpoint Final (Confirmado Funcional):
+```bash
+POST /contact/checkNumbers/{instance}
+Body: {"numbers": ["5511999999999"]}
+```
 
-### ❌ Endpoints que Retornam 404:
-- `POST /chat/fetchProfilePicture` - 404
-- `GET /chat/findProfilePicture` - 404  
-- `GET /chat/findPicture` - 404
-- `GET /chat/findContact` - 404
+**Por que este funciona:**
+- ✅ É o endpoint OFICIAL da Evolution API v2 para validar números
+- ✅ Retorna dados completos do contato incluindo `profilePicUrl`
+- ✅ Mais robusto e estável que endpoints de chat
+- ✅ Aceita múltiplos números de uma vez (array)
 
-## 🎯 Solução Implementada
+## 🎯 Solução Implementada (v3 - FINAL)
 
-### Estratégia de 3 Níveis (Nunca Trava o Processo)
+### Estratégia de 2 Níveis (Simplificada e Robusta)
 
 #### 1️⃣ **Tentar extrair do payload da mensagem**
 Algumas vezes a Evolution API já envia a foto no próprio evento `messages.upsert`:
 
 ```typescript
-// Campos possíveis no payload
 messagePayload.profilePictureUrl
 messagePayload.profilePicUrl
 messagePayload.picture
 messagePayload.imgUrl
 ```
 
-#### 2️⃣ **Buscar via findContacts (ÚNICO endpoint confirmado funcionando)**
+#### 2️⃣ **POST /contact/checkNumbers (SOLUÇÃO DEFINITIVA)**
+
+**Request:**
 ```bash
-GET /chat/findContacts/{instance}?where[remoteJid]=5511999999999@s.whatsapp.net
+POST https://evolution-api-production-eb21.up.railway.app/contact/checkNumbers/whatsapp-principal
+
+Headers:
+  apikey: Beagle3005
+  Content-Type: application/json
+
+Body:
+{
+  "numbers": ["5511999999999"]  // Apenas o número, sem @s.whatsapp.net
+}
 ```
 
-**Headers necessários:**
-```bash
-apikey: Beagle3005
-Content-Type: application/json
-```
-
-**Resposta esperada (HTTP 200):**
+**Response (HTTP 200):**
 ```json
 [
   {
-    "id": "5511999999999@s.whatsapp.net",
-    "profilePictureUrl": "https://pps.whatsapp.net/v/...",
-    "pushName": "João Silva",
-    "isGroup": false
+    "exists": true,
+    "jid": "5511999999999@s.whatsapp.net",
+    "numberFormatted": "+55 11 99999-9999",
+    "profilePicUrl": "https://pps.whatsapp.net/v/...",  ← ESTE CAMPO!
+    "isGroup": false,
+    "isWhatsApp": true
   }
 ]
 ```
 
-#### 3️⃣ **Fallback Seguro para null**
-Se nenhuma das estratégias funcionar:
-- ✅ Retorna `null`
-- ✅ Salva o contato SEM foto
-- ✅ Salva a mensagem normalmente
-- ✅ **NUNCA trava o webhook**
-
-## 🔧 Implementação no Webhook
-
+**Extração da Foto:**
 ```typescript
-// PASSO 1: Tentar buscar foto (NÃO CRÍTICO - timeout 5s)
-const profilePictureUrl = await fetchProfilePicture(
-  key.remoteJid,    // Ex: 5511999999999@s.whatsapp.net
-  payload.data      // Payload completo da mensagem
-)
+const phoneNumber = remoteJid.split('@')[0]  // "5511999999999@s.whatsapp.net" → "5511999999999"
 
-// PASSO 2: Salvar contato (SEMPRE salva, mesmo sem foto)
-await upsertWhatsAppContact({
-  remote_jid: key.remoteJid,
-  push_name: pushName || undefined,
-  profile_picture_url: profilePictureUrl || undefined,  // ✅ null é aceito
-  is_group: key.remoteJid.includes('@g.us')
+const response = await fetch(`${API_URL}/contact/checkNumbers/${instance}`, {
+  method: 'POST',
+  headers: { 'apikey': API_KEY, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ numbers: [phoneNumber] })
 })
 
-// PASSO 3: Salvar mensagem (FK constraint resolvido)
-await upsertWhatsAppMessage(messageInput)
-```
-
-## 🛡️ Proteções Implementadas
-
-### 1. **Timeout de 5 segundos**
-```typescript
-const controller = new AbortController()
-const timeoutId = setTimeout(() => controller.abort(), 5000)
-```
-
-### 2. **Try-Catch Global**
-```typescript
-try {
-  // Buscar foto
-} catch (error) {
-  console.error('❌ [FOTO] Erro (não crítico):', error)
-  return null  // ✅ Nunca quebra o processo
-}
-```
-
-### 3. **Validação de Tipo**
-```typescript
-if (photoUrl && typeof photoUrl === 'string') {
-  return photoUrl
-}
-```
-
-### 4. **Array ou Objeto**
-```typescript
-const contacts = Array.isArray(data) ? data : (data ? [data] : [])
+const data = await response.json()
+const photoUrl = data[0]?.profilePicUrl  // ✅ Foto do perfil
 ```
 
 ## 📊 Campos Verificados na Resposta
