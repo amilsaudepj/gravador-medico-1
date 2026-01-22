@@ -1,7 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { Home, Compass, Wrench, ShoppingBag, User, FileText, BarChart3, ShoppingCart, MessageSquare, MessageCircle } from "lucide-react"
+import { Home, Compass, Wrench, ShoppingBag, User, FileText, BarChart3, ShoppingCart, MessageSquare, MessageCircle, Target } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import { useState } from "react"
 import NotificationBell from "./NotificationBell"
@@ -41,6 +41,13 @@ export default function DockSidebar() {
       href: "/dashboard/whatsapp",
       label: "WhatsApp",
       description: "Inbox de conversas",
+    },
+    {
+      id: "tracking",
+      icon: <Target className="w-6 h-6" />,
+      href: "/admin/tracking",
+      label: "Tracking",
+      description: "Rastreamento e atribuição",
     },
     {
       id: "chat",
