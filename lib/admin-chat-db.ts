@@ -232,8 +232,9 @@ export async function getAdminUsers() {
   try {
     const { data, error } = await supabaseAdmin
       .from('users')
-      .select('id, name, email, avatar_url, role')
+      .select('id, name, email, avatar_url, role, is_online, last_seen_at')
       .eq('role', 'admin')
+      .order('is_online', { ascending: false }) // Online primeiro
       .order('name')
 
     if (error) throw error

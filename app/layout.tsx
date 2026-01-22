@@ -3,7 +3,6 @@ import "./globals.css"
 import { Suspense } from 'react'
 import { headers } from 'next/headers' // ✅ Importar headers
 import AnalyticsTracker from '@/components/AnalyticsTracker'
-import CookieBanner from '@/components/CookieBanner'
 import { ToastProvider } from '@/components/ui/toast' // ✅ Provider para notificações
 import { NotificationProvider } from '@/components/NotificationProvider' // ✅ Sistema de notificações
 import { Toaster } from 'sonner' // ✅ Toast visual
@@ -91,9 +90,6 @@ export default async function RootLayout({
             <Suspense fallback={null}>
               <AnalyticsTracker city={city} country={country} region={region} />
             </Suspense>
-            
-            {/* Banner de Consentimento LGPD */}
-            <CookieBanner />
             
             {children}
           </ToastProvider>

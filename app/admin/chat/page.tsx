@@ -45,20 +45,32 @@ export default function AdminChatPage() {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const { data: { user }, error } = await supabase.auth.getUser()
-        
-        if (error || !user) {
-          console.error('Erro ao obter usuário:', error)
-          setLoading(false) // 👈 IMPORTANTE: Desativa loading antes de redirecionar
+        // Verificar sessão via cookie HttpOnly (igual ao admin layout)
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include'
+        })
+
+        if (!response.ok) {
+          console.error('Não autenticado')
+          setLoading(false)
           router.push('/login')
           return
         }
 
-        console.log('✅ Usuário autenticado:', user.id)
-        setCurrentUserId(user.id)
+        const data = await response.json()
+        
+        if (!data.user || data.user.role !== 'admin') {
+          console.error('Usuário não é admin')
+          setLoading(false)
+          router.push('/login')
+          return
+        }
+
+        console.log('✅ Usuário autenticado:', data.user.id)
+        setCurrentUserId(data.user.id)
       } catch (err) {
         console.error('Erro ao carregar usuário:', err)
-        setLoading(false) // 👈 IMPORTANTE: Desativa loading antes de redirecionar
+        setLoading(false)
         router.push('/login')
       }
     }
@@ -462,29 +474,51 @@ export default function AdminChatPage() {
                   <p className="text-sm">Nenhum outro administrador encontrado</p>
                 </div>
               ) : (
-                adminUsers.map((user) => (
-                  <button
-                    key={user.id}
-                    onClick={() => handleNewChat(user.id)}
-                    className="w-full p-3 hover:bg-[#2a3942] rounded-lg flex items-center gap-3 transition-colors"
-                  >
-                    {user.avatar_url ? (
-                      <img
-                        src={user.avatar_url}
-                        alt=""
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-[#6b7c85] flex items-center justify-center text-white font-semibold">
-                        {(user.name?.[0] || user.email[0]).toUpperCase()}
+                adminUsers.map((user) => {
+                  const isOnline = user.is_online
+                  const lastSeen = user.last_seen_at 
+                    ? formatDistanceToNow(new Date(user.last_seen_at), { addSuffix: true, locale: ptBR })
+                    : 'Nunca'
+                  
+                  return (
+                    <button
+                      key={user.id}
+                      onClick={() => handleNewChat(user.id)}
+                      className="w-full p-3 hover:bg-[#2a3942] rounded-lg flex items-center gap-3 transition-colors"
+                    >
+                      {/* Avatar com indicador online */}
+                      <div className="relative">
+                        {user.avatar_url ? (
+                          <img
+                            src={user.avatar_url}
+                            alt=""
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-[#6b7c85] flex items-center justify-center text-white font-semibold">
+                            {(user.name?.[0] || user.email[0]).toUpperCase()}
+                          </div>
+                        )}
+                        {/* Indicador online/offline */}
+                        <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#202c33] ${
+                          isOnline ? 'bg-green-500' : 'bg-gray-500'
+                        }`} />
                       </div>
-                    )}
-                    <div className="flex-1 text-left">
-                      <p className="text-white font-medium">{user.name || user.email}</p>
-                      <p className="text-xs text-gray-400">{user.email}</p>
-                    </div>
-                  </button>
-                ))
+
+                      <div className="flex-1 text-left">
+                        <div className="flex items-center gap-2">
+                          <p className="text-white font-medium">{user.name || user.email}</p>
+                          {isOnline && (
+                            <span className="text-xs text-green-400">● Online</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400">
+                          {isOnline ? user.email : `Visto ${lastSeen}`}
+                        </p>
+                      </div>
+                    </button>
+                  )
+                })
               )}
             </div>
           </div>
