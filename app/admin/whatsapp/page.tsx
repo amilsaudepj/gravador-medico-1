@@ -451,7 +451,7 @@ export default function WhatsAppInboxPage() {
 
           {/* Área de mensagens - Background WhatsApp */}
           <div
-            className="flex-1 overflow-y-auto p-4 bg-[#0b141a] min-h-0"
+            className="flex-1 overflow-y-auto p-4 bg-[#0b141a] min-h-0 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent hover:scrollbar-thumb-white/20"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='400' height='400' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='pattern' x='0' y='0' width='40' height='40' patternUnits='userSpaceOnUse'%3E%3Cpath d='M0 20 Q10 10 20 20 T40 20' stroke='%23ffffff' stroke-width='0.3' fill='none' opacity='0.05'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='400' height='400' fill='url(%23pattern)'/%3E%3C/svg%3E")`,
               backgroundRepeat: 'repeat',

@@ -225,13 +225,30 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* Scrollbar para tema escuro do WhatsApp */
-.bg-\[\#111b21\] ::-webkit-scrollbar-thumb {
+/* Scrollbar específico para área de mensagens do WhatsApp */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.scrollbar-thumb-white\/10::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.bg-\[\#111b21\] ::-webkit-scrollbar-thumb:hover {
+.scrollbar-thumb-white\/20:hover::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.15);
+}
+
+.scrollbar-thumb-gray-700\/30::-webkit-scrollbar-thumb {
+  background: rgba(55, 65, 81, 0.3);
+}
+
+.scrollbar-thumb-gray-700\/50:hover::-webkit-scrollbar-thumb {
+  background: rgba(55, 65, 81, 0.5);
+}
+
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* Selection */
