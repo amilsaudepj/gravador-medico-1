@@ -236,15 +236,21 @@ Em `DockSidebar.tsx`, adicionar item:
 - [x] Database schema (chat interno)
 - [x] Types TypeScript (admin-chat.ts)
 - [x] Functions helper (admin-chat-db.ts)
-- [ ] **UI do Chat Interno** (próximo passo)
-- [ ] **Realtime no Chat Interno** (próximo passo)
-- [ ] **Upload de arquivos** (próximo passo)
+- [x] **UI do Chat Interno** (/admin/chat criada!)
+- [x] **Realtime no Chat Interno** (integrado!)
+- [x] **Notificações do Chat Interno** (addNotification integrado!)
+- [x] **Autenticação** (supabase.auth.getUser)
+- [x] **Menu no DockSidebar** (Chat Interno adicionado)
+- [ ] **Executar SQL no Supabase** (ação do usuário)
+- [ ] **Upload de arquivos** (futuro)
 
 ---
 
-## 🎯 Commit Atual
+## 🎯 Commits
 ```
 22f01e0 - feat: sistema de notificações em tempo real com sininho
+1999b11 - feat: database schema e funções para chat interno entre admins
+PRÓXIMO - feat: UI completa do chat interno com Realtime
 ```
 
 **Deployed:** ✅ Vercel
