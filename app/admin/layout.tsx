@@ -274,7 +274,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex relative">
       {/* Sidebar Desktop */}
       <aside className="hidden lg:flex lg:w-72 lg:flex-col lg:fixed lg:inset-y-0 lg:z-40">
         <div className="flex flex-col h-full bg-gradient-to-b from-gray-900 to-gray-800 overflow-y-auto shadow-2xl">
@@ -574,8 +574,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         {/* Page Content */}
-        <main className={`flex-1 ${pathname === '/admin/whatsapp' ? 'p-0 overflow-hidden' : 'p-4 sm:p-6 lg:p-8 overflow-y-auto'}`}>
-          {children}
+        <main className={`flex-1 ${pathname === '/admin/whatsapp' ? 'p-0' : 'p-4 sm:p-6 lg:p-8 overflow-y-auto'}`}>
+          <div className={pathname === '/admin/whatsapp' ? 'h-full overflow-hidden' : ''}>
+            {children}
+          </div>
         </main>
       </div>
     </div>

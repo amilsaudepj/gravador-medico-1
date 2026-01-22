@@ -84,7 +84,15 @@ export default async function RootLayout({
       <body className="bg-white">
         <NotificationProvider>
           <ToastProvider>
-            <Toaster position="bottom-right" />
+            <Toaster 
+              position="bottom-right" 
+              className="z-[9999]"
+              toastOptions={{
+                style: {
+                  zIndex: 9999,
+                }
+              }}
+            />
             
             {/* Analytics Tracker - rastreia visitas automaticamente */}
             <Suspense fallback={null}>
