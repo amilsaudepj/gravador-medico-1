@@ -399,9 +399,9 @@ export default function WhatsAppInboxPage() {
       }
     >
       {selectedConversation ? (
-        <>
+        <div className="flex flex-col h-full">
           {/* Header do chat - Estilo WhatsApp */}
-          <div className="h-[60px] bg-[#202c33] border-b border-gray-700 px-4 flex items-center justify-between">
+          <div className="h-[60px] bg-[#202c33] border-b border-gray-700 px-4 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
               {/* Avatar */}
               {selectedConversation.profile_picture_url ? (
@@ -439,7 +439,7 @@ export default function WhatsAppInboxPage() {
 
           {/* Área de mensagens - Background WhatsApp */}
           <div
-            className="flex-1 overflow-y-auto p-4 bg-[#0b141a]"
+            className="flex-1 overflow-y-auto p-4 bg-[#0b141a] min-h-0"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='400' height='400' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='pattern' x='0' y='0' width='40' height='40' patternUnits='userSpaceOnUse'%3E%3Cpath d='M0 20 Q10 10 20 20 T40 20' stroke='%23ffffff' stroke-width='0.3' fill='none' opacity='0.05'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='400' height='400' fill='url(%23pattern)'/%3E%3C/svg%3E")`,
               backgroundRepeat: 'repeat',
@@ -471,7 +471,7 @@ export default function WhatsAppInboxPage() {
           </div>
 
           {/* Input de mensagem - Estilo WhatsApp */}
-          <div className="bg-[#202c33] border-t border-gray-700 px-4 py-3">
+          <div className="bg-[#202c33] border-t border-gray-700 px-4 py-3 flex-shrink-0">
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -500,7 +500,7 @@ export default function WhatsAppInboxPage() {
               </button>
             </div>
           </div>
-        </>
+        </div>
       ) : (
         // Estado vazio - Estilo WhatsApp
         <div className="flex-1 flex items-center justify-center bg-[#222e35] border-l border-gray-700">

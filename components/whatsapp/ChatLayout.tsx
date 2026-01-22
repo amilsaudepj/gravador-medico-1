@@ -14,14 +14,14 @@ interface ChatLayoutProps {
 
 export default function ChatLayout({ children, sidebar }: ChatLayoutProps) {
   return (
-    <div className="flex h-screen bg-[#111b21]">
+    <div className="flex h-[calc(100vh-64px)] bg-[#111b21] overflow-hidden">
       {/* Sidebar de conversas */}
-      <div className="w-[400px] bg-[#111b21] border-r border-gray-800 flex flex-col">
+      <div className="w-[400px] bg-[#111b21] border-r border-gray-800 flex flex-col overflow-hidden">
         {sidebar}
       </div>
 
       {/* Área principal de mensagens */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {children}
       </div>
     </div>
