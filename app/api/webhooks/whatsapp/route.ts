@@ -16,6 +16,25 @@ import {
 import type { EvolutionMessagePayload, CreateMessageInput } from '@/lib/types/whatsapp'
 
 // ================================================================
+// CACHE DE PROTEÇÃO CONTRA DUPLICATAS
+// ================================================================
+// Map para armazenar messageIds processados recentemente
+// Previne processamento duplicado de webhooks (Evolution API pode reenviar)
+const messageCache = new Map<string, number>()
+
+// Limpar cache a cada 5 minutos (remove mensagens antigas)
+setInterval(() => {
+  const now = Date.now()
+  const expireTime = 60000 // 60 segundos
+  
+  for (const [messageId, timestamp] of messageCache.entries()) {
+    if (now - timestamp > expireTime) {
+      messageCache.delete(messageId)
+    }
+  }
+}, 5 * 60 * 1000)
+
+// ================================================================
 // Mapear status da Evolution API para nosso schema
 // ================================================================
 function mapEvolutionStatus(evolutionStatus?: string): 'sent' | 'delivered' | 'read' | 'error' | undefined {
@@ -383,6 +402,39 @@ export async function POST(request: NextRequest) {
   try {
     const payload: EvolutionMessagePayload = await request.json()
     const eventName = (payload as any)?.event?.toLowerCase?.() || ''
+
+    // ================================================================
+    // PROTEÇÃO ANTI-DUPLICATA: Verificar cache ANTES de processar
+    // ================================================================
+    const messageId = (payload as any)?.data?.key?.id
+    
+    if (messageId && messageCache.has(messageId)) {
+      const cachedTime = messageCache.get(messageId)!
+      const elapsedSeconds = Math.floor((Date.now() - cachedTime) / 1000)
+      
+      console.log(`⚠️ [DUPLICATA] Mensagem ignorada: ${messageId} (recebida há ${elapsedSeconds}s)`)
+      
+      return NextResponse.json({ 
+        success: true, 
+        status: 'ignored', 
+        reason: 'duplicate',
+        messageId,
+        elapsedSeconds
+      })
+    }
+
+    // Adicionar ao cache se for mensagem nova (apenas para messages.upsert)
+    if (messageId && (eventName === 'messages.upsert' || eventName === 'messages_upsert')) {
+      messageCache.set(messageId, Date.now())
+      console.log(`✅ [CACHE] Mensagem adicionada: ${messageId} (cache size: ${messageCache.size})`)
+      
+      // Auto-limpeza individual após 60 segundos
+      setTimeout(() => {
+        if (messageCache.delete(messageId)) {
+          console.log(`🗑️ [CACHE] Mensagem removida: ${messageId}`)
+        }
+      }, 60000)
+    }
 
     // ⚡ EARLY RETURN: Processar eventos de status/presença ANTES (mais rápido)
     // Atualizar status de mensagens (checks)
