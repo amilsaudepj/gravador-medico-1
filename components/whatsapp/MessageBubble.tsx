@@ -15,6 +15,14 @@ interface MessageBubbleProps {
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
   const isFromMe = message.from_me
+  
+  // DEBUG: Log temporário para verificar valor de from_me
+  console.log('🔍 [MessageBubble]', {
+    id: message.id.substring(0, 8),
+    content: message.content?.substring(0, 20),
+    from_me: message.from_me,
+    isFromMe: isFromMe
+  })
 
   return (
     <div
