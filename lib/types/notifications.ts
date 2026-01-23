@@ -18,7 +18,9 @@ export interface Notification {
   // Metadata específica por tipo
   metadata?: {
     whatsapp_remote_jid?: string       // Para redirecionar ao chat
+    whatsapp_message_id?: string       // Dedupe de notificações WhatsApp
     admin_chat_conversation_id?: string // Para redirecionar ao chat interno
+    admin_chat_message_id?: string     // Dedupe de notificações do chat interno
     order_id?: string
     customer_id?: string
     profile_picture_url?: string       // Foto do remetente

@@ -13,6 +13,7 @@
 /out/
 .next.bak-*
 next-dev.log
+next-dev-*.log
 
 # production
 /build
@@ -20,6 +21,8 @@ next-dev.log
 # misc
 .DS_Store
 *.pem
+__restore_backup__/
+.restore-manifest-*.json
 
 # debug
 npm-debug.log*
