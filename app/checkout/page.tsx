@@ -647,8 +647,8 @@ export default function CheckoutPage() {
           // 🎯 Marcar carrinho como recuperado
           await markCartAsRecovered(result.order_id)
           
-          // Mostra resultado do cartão
-          window.location.href = `/success/credit?order_id=${result.order_id}&status=${result.status}`
+          // Redireciona para página de obrigado
+          window.location.href = `/obrigado?email=${encodeURIComponent(formData.email)}&order_id=${result.order_id}`
         } else {
           throw new Error('Método de pagamento inválido')
         }

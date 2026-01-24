@@ -4,7 +4,6 @@ import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { CheckCircle, Mail, MessageCircle, ArrowRight, Sparkles, Gift } from 'lucide-react'
-import Link from 'next/link'
 
 function ObrigadoContent() {
   const searchParams = useSearchParams()
@@ -134,7 +133,7 @@ function ObrigadoContent() {
                   2
                 </div>
                 <p className="text-gray-700 pt-1">
-                  <strong>Entre na área de membros</strong> usando seu email e senha
+                  <strong>Acesse sua conta</strong> usando o email e senha que você recebeu
                 </p>
               </div>
               
@@ -143,7 +142,7 @@ function ObrigadoContent() {
                   3
                 </div>
                 <p className="text-gray-700 pt-1">
-                  <strong>Comece a usar</strong> o Gravador Médico imediatamente
+                  <strong>Precisa de ajuda?</strong> Entre em contato pelo WhatsApp: +55 21 98645-1821
                 </p>
               </div>
             </div>
@@ -151,23 +150,20 @@ function ObrigadoContent() {
 
           {/* CTA Buttons */}
           <div className="space-y-3">
-            <Link
-              href="/dashboard"
-              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-brand-600 to-brand-500 text-white rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-brand-500/30 transition-all group"
-            >
-              Acessar Área de Membros
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
-
             <a
-              href="https://wa.me/5511999999999?text=Olá!%20Acabei%20de%20comprar%20o%20Gravador%20Médico%20e%20preciso%20de%20ajuda"
+              href="https://wa.me/5521986451821?text=Olá!%20Acabei%20de%20comprar%20o%20Gravador%20Médico%20e%20gostaria%20de%20obter%20meus%20dados%20de%20acesso."
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-green-500 text-white rounded-xl font-bold text-lg hover:bg-green-600 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-green-500/30 transition-all group"
             >
               <MessageCircle className="w-5 h-5" />
-              Precisa de Ajuda? Chame no WhatsApp
+              Falar com Suporte no WhatsApp
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </a>
+
+            <div className="text-center text-sm text-gray-500 pt-2">
+              <p>📱 WhatsApp: +55 21 98645-1821</p>
+            </div>
           </div>
         </motion.div>
 
@@ -197,9 +193,14 @@ function ObrigadoContent() {
         {/* Support Info */}
         <div className="text-center mt-8 text-sm text-gray-600">
           <p>
-            Tem alguma dúvida? Entre em contato pelo email:{' '}
-            <a href="mailto:suporte@gravadormedico.com.br" className="text-brand-600 font-semibold hover:underline">
-              suporte@gravadormedico.com.br
+            📞 Suporte via WhatsApp:{' '}
+            <a 
+              href="https://wa.me/5521986451821" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-green-600 font-semibold hover:underline"
+            >
+              +55 21 98645-1821
             </a>
           </p>
         </div>
