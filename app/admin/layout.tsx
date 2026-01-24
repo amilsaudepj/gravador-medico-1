@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
 import { WhatsAppNotificationProvider } from '@/components/WhatsAppNotificationProvider'
+import { NotificationProvider } from '@/components/NotificationProvider'
 
 const automationItems = [
   { 
@@ -371,7 +372,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-black flex relative overflow-hidden">
+    <NotificationProvider>
+      <div className="h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-black flex relative overflow-hidden">
       {/* Sidebar Desktop */}
       <aside className="hidden lg:flex lg:w-80 lg:flex-col lg:fixed lg:inset-y-0 lg:z-40">
         <div className="flex flex-col h-full bg-gradient-to-b from-gray-900 to-gray-800 overflow-y-auto shadow-2xl">
@@ -781,6 +783,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </main>
       </div>
-    </div>
+      </div>
+    </NotificationProvider>
   )
 }

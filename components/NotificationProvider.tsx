@@ -266,28 +266,38 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     const bootstrap = async () => {
       try {
+        // Buscar a última mensagem WhatsApp e marcar como "já vista"
         const { data: latestMessage } = await supabase
           .from('whatsapp_messages')
           .select('id')
           .order('timestamp', { ascending: false })
           .limit(1)
 
-        if (!cancelled) {
-          lastWhatsAppMessageIdRef.current = latestMessage?.[0]?.id ?? null
+        if (!cancelled && latestMessage?.[0]?.id) {
+          lastWhatsAppMessageIdRef.current = latestMessage[0].id
+          // 🔥 IMPORTANTE: Marcar como já vista para NÃO notificar ao carregar
+          const msgKey = `whatsapp:${latestMessage[0].id}`
+          seenNotificationsRef.current.add(msgKey)
+          console.log('🔵 [Bootstrap] Última mensagem WhatsApp marcada como vista:', msgKey)
         }
       } catch {
         // Ignorar falhas no bootstrap
       }
 
       try {
+        // Buscar a última mensagem do chat interno e marcar como "já vista"
         const { data: latestChat } = await supabase
           .from('admin_chat_messages')
           .select('id')
           .order('created_at', { ascending: false })
           .limit(1)
 
-        if (!cancelled) {
-          lastAdminChatMessageIdRef.current = latestChat?.[0]?.id ?? null
+        if (!cancelled && latestChat?.[0]?.id) {
+          lastAdminChatMessageIdRef.current = latestChat[0].id
+          // 🔥 IMPORTANTE: Marcar como já vista para NÃO notificar ao carregar
+          const chatKey = `admin_chat:${latestChat[0].id}`
+          seenNotificationsRef.current.add(chatKey)
+          console.log('🔵 [Bootstrap] Última mensagem Chat marcada como vista:', chatKey)
         }
       } catch {
         // Ignorar falhas no bootstrap

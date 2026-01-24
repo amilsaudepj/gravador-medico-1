@@ -4,7 +4,6 @@ import { Suspense } from 'react'
 import { headers } from 'next/headers' // ✅ Importar headers
 import AnalyticsTracker from '@/components/AnalyticsTracker'
 import { ToastProvider } from '@/components/ui/toast' // ✅ Provider para notificações
-import { NotificationProvider } from '@/components/NotificationProvider' // ✅ Sistema de notificações
 import { Toaster } from 'sonner' // ✅ Toast visual
 import { Plus_Jakarta_Sans } from 'next/font/google'
 
@@ -112,26 +111,24 @@ export default async function RootLayout({
         {/* End Meta Pixel Code */}
       </head>
       <body className={`${plusJakartaSans.className} bg-white`}>
-        <NotificationProvider>
-          <ToastProvider>
-            <Toaster 
-              position="bottom-right" 
-              className="z-[9999]"
-              toastOptions={{
-                style: {
-                  zIndex: 9999,
-                }
-              }}
-            />
-            
-            {/* Analytics Tracker - rastreia visitas automaticamente */}
-            <Suspense fallback={null}>
-              <AnalyticsTracker city={city} country={country} region={region} />
-            </Suspense>
-            
-            {children}
-          </ToastProvider>
-        </NotificationProvider>
+        <ToastProvider>
+          <Toaster 
+            position="bottom-right" 
+            className="z-[9999]"
+            toastOptions={{
+              style: {
+                zIndex: 9999,
+              }
+            }}
+          />
+          
+          {/* Analytics Tracker - rastreia visitas automaticamente */}
+          <Suspense fallback={null}>
+            <AnalyticsTracker city={city} country={country} region={region} />
+          </Suspense>
+          
+          {children}
+        </ToastProvider>
       </body>
     </html>
   )
