@@ -6,6 +6,14 @@ import AnalyticsTracker from '@/components/AnalyticsTracker'
 import { ToastProvider } from '@/components/ui/toast' // ✅ Provider para notificações
 import { NotificationProvider } from '@/components/NotificationProvider' // ✅ Sistema de notificações
 import { Toaster } from 'sonner' // ✅ Toast visual
+import { Plus_Jakarta_Sans } from 'next/font/google'
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-plus-jakarta',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: "Gravador Médico",
@@ -38,7 +46,7 @@ export default async function RootLayout({
   const region = headersList.get('x-vercel-ip-country-region')
 
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" className={plusJakartaSans.variable}>
       <head>
         {/* Google tag (gtag.js) */}
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-QPXT7Q09T3"></script>
@@ -81,7 +89,7 @@ export default async function RootLayout({
         </noscript>
         {/* End Meta Pixel Code */}
       </head>
-      <body className="bg-white">
+      <body className={`${plusJakartaSans.className} bg-white`}>
         <NotificationProvider>
           <ToastProvider>
             <Toaster 
