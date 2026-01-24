@@ -690,7 +690,9 @@ export default function LandingPage() {
                     >
                       <h2 className="text-4xl md:text-5xl lg:text-6xl font-black mb-6 leading-tight max-w-lg">
                         <span className="bg-gradient-to-r from-brand-500 to-brand-300 bg-clip-text text-transparent">
-                          Tudo que você precisa<br />em um só lugar
+                          Tudo que você precisa
+                          <br />
+                          em um só lugar
                         </span>
                       </h2>
                       

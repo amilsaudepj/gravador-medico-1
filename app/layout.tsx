@@ -16,12 +16,34 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 })
 
 export const metadata: Metadata = {
-  title: "Gravador Médico",
-  description: "Método VoicePen para prontuários médicos",
+  title: "Gravador Médico - Prontuário pronto enquanto conversa",
+  description: "Transforme consultas em documentação completa sem digitar uma palavra. O problema não é o prontuário. É a digitação. Econize até 3 horas por dia.",
   icons: {
     icon: '/images/novo-icon-gravadormedico.png',
     shortcut: '/images/novo-icon-gravadormedico.png',
     apple: '/images/novo-icon-gravadormedico.png',
+  },
+  openGraph: {
+    title: "Gravador Médico - Prontuário pronto enquanto conversa",
+    description: "Transforme consultas em documentação completa sem digitar uma palavra. Econize até 3 horas por dia.",
+    url: "https://www.gravadormedico.com.br",
+    siteName: "Gravador Médico",
+    images: [
+      {
+        url: "/images/novo-icon-gravadormedico.png",
+        width: 1200,
+        height: 630,
+        alt: "Gravador Médico - Prontuário pronto enquanto conversa",
+      },
+    ],
+    locale: "pt_BR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Gravador Médico - Prontuário pronto enquanto conversa",
+    description: "Transforme consultas em documentação completa sem digitar uma palavra. Econize até 3 horas por dia.",
+    images: ["/images/novo-icon-gravadormedico.png"],
   },
 }
 
