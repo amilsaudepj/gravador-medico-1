@@ -517,10 +517,47 @@ export async function handleAppmaxWebhook(request: NextRequest, endpoint: string
   try {
     const now = new Date().toISOString()
     
-    // Extrair coupon_code do metadata
-    const metadata = data.metadata || payload.metadata || {}
-    const couponCode = metadata.coupon_code || null
-    const couponDiscount = metadata.coupon_discount || 0
+    // 🎯 BUSCAR CUPOM DO CHECKOUT_ATTEMPTS (nosso sistema)
+    let couponCode: string | null = null
+    let couponDiscount: number = 0
+    
+    try {
+      const { data: checkoutAttempt } = await supabaseAdmin
+        .from('checkout_attempts')
+        .select('metadata')
+        .eq('appmax_order_id', orderId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      
+      if (checkoutAttempt?.metadata) {
+        couponCode = checkoutAttempt.metadata.coupon_code || null
+        couponDiscount = checkoutAttempt.metadata.coupon_discount || 0
+      }
+    } catch (error) {
+      console.warn('⚠️ Não foi possível buscar cupom do checkout_attempts:', error)
+    }
+    
+    // Fallback: tentar extrair do payload do webhook (caso Appmax envie)
+    if (!couponCode) {
+      const metadata = data.metadata || payload.metadata || {}
+      couponCode = 
+        data.coupon_code || 
+        payload.coupon_code || 
+        data.coupon || 
+        payload.coupon ||
+        metadata.coupon_code || 
+        metadata.coupon ||
+        null
+      
+      couponDiscount = 
+        data.coupon_discount || 
+        payload.coupon_discount || 
+        data.discount_amount ||
+        payload.discount_amount ||
+        metadata.coupon_discount || 
+        0
+    }
     
     const salePayload: Record<string, any> = {
       appmax_order_id: orderId,
