@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const days = body.days || 30 // Últimos 30 dias por padrão
+    const days = body.days || 45 // Últimos 45 dias por padrão (desde 15/01)
     const force = body.force || false
 
     console.log(`🔄 Iniciando sincronização dos últimos ${days} dias...`)

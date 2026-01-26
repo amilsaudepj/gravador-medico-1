@@ -23,7 +23,7 @@ export function SyncAppmaxButton() {
           'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`
         },
         body: JSON.stringify({
-          days: 30 // Últimos 30 dias
+          days: 45 // Últimos 45 dias (desde 15/01/2026)
         })
       })
 
