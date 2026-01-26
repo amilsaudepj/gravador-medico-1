@@ -22,11 +22,17 @@ GROUP BY status
 ORDER BY total DESC;
 
 -- PASSO 3: DELETAR TODOS os pedidos
+-- Primeiro deletar sales_items (itens dos pedidos)
+DELETE FROM public.sales_items;
+
+-- Depois deletar sales (pedidos principais)
 DELETE FROM public.sales;
 
--- PASSO 4: Verificar que a tabela está vazia
-SELECT COUNT(*) as pedidos_restantes FROM public.sales;
--- Deve retornar 0
+-- PASSO 4: Verificar que as tabelas estão vazias
+SELECT 
+    (SELECT COUNT(*) FROM public.sales) as pedidos_restantes,
+    (SELECT COUNT(*) FROM public.sales_items) as itens_restantes;
+-- Ambos devem retornar 0
 
 -- PASSO 5: Resetar sequência de IDs (opcional, para começar do 1)
 -- Isso garante que os novos pedidos terão IDs sequenciais limpos
