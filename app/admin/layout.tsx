@@ -144,12 +144,12 @@ const catalogItems = [
   },
 ]
 
-const menuItems = [
-  // 📊 OPERACIONAL (Core Business)
+// Menu de Produção (Vendas, Pagamentos, Relatórios)
+const producaoItems = [
   { 
-    icon: LayoutDashboard, 
-    label: 'Visão Geral', 
-    href: '/admin/dashboard',
+    icon: ShoppingCart, 
+    label: 'Vendas', 
+    href: '/admin/sales',
     badge: null
   },
   { 
@@ -159,26 +159,15 @@ const menuItems = [
     badge: null
   },
   { 
-    icon: ShoppingCart, 
-    label: 'Vendas', 
-    href: '/admin/sales',
+    icon: BarChart3, 
+    label: 'Relatórios', 
+    href: '/admin/reports',
     badge: null
   },
-  { 
-    icon: Users, 
-    label: 'Clientes', 
-    href: '/admin/customers',
-    badge: null
-  },
-  
-  // 🛍️ CATÁLOGO (Produtos + Cupons)
-  { 
-    label: 'Catálogo', 
-    icon: ShoppingBag,
-    items: catalogItems
-  },
-  
-  // 📈 ANALYTICS & GROWTH
+]
+
+// Menu de Gestão (Analytics, CRM, Clientes)
+const gestaoItems = [
   { 
     icon: TrendingUp, 
     label: 'Analytics', 
@@ -190,6 +179,43 @@ const menuItems = [
     label: 'CRM', 
     href: '/admin/crm',
     badge: null
+  },
+  { 
+    icon: Users, 
+    label: 'Clientes', 
+    href: '/admin/customers',
+    badge: null
+  },
+]
+
+const menuItems = [
+  // � VISÃO GERAL
+  { 
+    icon: LayoutDashboard, 
+    label: 'Visão Geral', 
+    href: '/admin/dashboard',
+    badge: null
+  },
+  
+  // 💰 PRODUÇÃO (Vendas, Pagamentos, Relatórios)
+  { 
+    label: 'Produção', 
+    icon: ShoppingBag,
+    items: producaoItems
+  },
+  
+  // � GESTÃO (Analytics, CRM, Clientes)
+  { 
+    label: 'Gestão', 
+    icon: Users,
+    items: gestaoItems
+  },
+  
+  // 🛍️ CATÁLOGO (Produtos + Cupons)
+  { 
+    label: 'Catálogo', 
+    icon: Package,
+    items: catalogItems
   },
   
   // 🔧 FERRAMENTAS
@@ -217,13 +243,7 @@ const menuItems = [
     badge: null
   },
   
-  // 📄 RELATÓRIOS & CONFIG
-  { 
-    icon: BarChart3, 
-    label: 'Relatórios', 
-    href: '/admin/reports',
-    badge: null
-  },
+  // ⚙️ CONFIGURAÇÕES
   { 
     icon: Bell, 
     label: 'Webhooks', 
