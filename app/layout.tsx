@@ -113,6 +113,9 @@ export default async function RootLayout({
 
         {/* Mercado Pago SDK */}
         <script src="https://sdk.mercadopago.com/js/v2" />
+        
+        {/* Cloudflare Turnstile (Anti-Bot) */}
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
       </head>
       <body className={`${plusJakartaSans.className} bg-white`}>
         <ToastProvider>
