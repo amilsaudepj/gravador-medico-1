@@ -127,32 +127,40 @@ export async function POST(request: NextRequest) {
         
         const mpStartTime = Date.now()
         
-        const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
-            'X-Idempotency-Key': idempotencyKey // ✅ Idempotência também no gateway
-          },
-          body: JSON.stringify({
-            token: mpToken,
-            transaction_amount: amount,
-            description: 'Gravador Médico - Acesso Vitalício',
-            payment_method_id: 'credit_card',
-            installments: 1,
-            payer: {
-              email: customer.email,
-              identification: {
-                type: 'CPF',
-                number: customer.cpf.replace(/\D/g, '')
-              }
+        // Criar AbortController para timeout de 30 segundos
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000)
+        
+        try {
+          const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
+              'X-Idempotency-Key': idempotencyKey // ✅ Idempotência também no gateway
             },
-            notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
-            statement_descriptor: 'GRAVADOR MEDICO'
+            body: JSON.stringify({
+              token: mpToken,
+              transaction_amount: amount,
+              description: 'Gravador Médico - Acesso Vitalício',
+              payment_method_id: 'credit_card',
+              installments: 1,
+              payer: {
+                email: customer.email,
+                identification: {
+                  type: 'CPF',
+                  number: customer.cpf.replace(/\D/g, '')
+                }
+              },
+              notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
+              statement_descriptor: 'GRAVADOR MEDICO'
+            }),
+            signal: controller.signal
           })
-        })
-
-        const mpResult = await mpResponse.json()
+          
+          clearTimeout(timeoutId)
+          
+          const mpResult = await mpResponse.json()
         const mpResponseTime = Date.now() - mpStartTime
 
         console.log(`📊 Mercado Pago: ${mpResult.status} (${mpResponseTime}ms)`)
@@ -233,6 +241,19 @@ export async function POST(request: NextRequest) {
 
         // Erro elegível para retry AppMax
         console.log('🔄 Erro elegível para fallback, tentando AppMax...')
+        
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId)
+          
+          // Tratar timeout especificamente
+          if (fetchError.name === 'AbortError') {
+            console.error('⏱️ Timeout: Mercado Pago não respondeu em 30s')
+            throw new Error('Timeout: Mercado Pago não respondeu em 30s')
+          }
+          
+          // Outros erros de rede
+          throw fetchError
+        }
 
       } catch (mpError: any) {
         console.error('❌ Erro crítico no Mercado Pago:', mpError.message)
