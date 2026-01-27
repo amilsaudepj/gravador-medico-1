@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { formatBRDateTime, getUTCDayRange } from '@/lib/date-utils'
 import { refundOrder } from '@/actions/refund-order'
 import { SyncAppmaxButton } from '@/components/dashboard/SyncAppmaxButton'
+import Image from 'next/image'
 import {
   Search,
   Download,
@@ -213,7 +214,14 @@ export default function SalesPage() {
       case 'mercadopago':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
-            🛡️ MP
+            <Image 
+              src="/mercado-pago-logo.png" 
+              alt="Mercado Pago" 
+              width={14} 
+              height={14}
+              className="object-contain"
+            />
+            MP
           </span>
         )
       case 'appmax':

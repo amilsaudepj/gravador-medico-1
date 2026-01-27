@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
+import Image from 'next/image'
 import {
   CreditCard,
   DollarSign,
@@ -19,7 +20,6 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Zap,
-  Shield,
   Target,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -192,7 +192,13 @@ export default function PaymentsAdminPage() {
     if (gateway === 'mercadopago' && !fallback) {
       return (
         <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 flex items-center gap-1">
-          <Shield className="w-3 h-3" />
+          <Image 
+            src="/mercado-pago-logo.png" 
+            alt="Mercado Pago" 
+            width={12} 
+            height={12}
+            className="object-contain"
+          />
           Mercado Pago
         </span>
       )
@@ -256,7 +262,7 @@ export default function PaymentsAdminPage() {
           <div className="flex gap-2">
             {[
               { id: "overview", label: "Visão Geral", icon: Activity },
-              { id: "mercadopago", label: "Mercado Pago", icon: Shield },
+              { id: "mercadopago", label: "Mercado Pago", icon: CreditCard },
               { id: "appmax", label: "AppMax", icon: Zap },
               { id: "cascata", label: "Análise Cascata", icon: Target },
             ].map((tab) => (
@@ -323,7 +329,13 @@ export default function PaymentsAdminPage() {
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-blue-100 text-sm font-medium">Mercado Pago</span>
-                  <Shield className="w-5 h-5" />
+                  <Image 
+                    src="/mercado-pago-logo.png" 
+                    alt="Mercado Pago" 
+                    width={20} 
+                    height={20}
+                    className="object-contain brightness-0 invert"
+                  />
                 </div>
                 <div className="text-3xl font-black">{stats.mp_sales}</div>
                 <div className="text-sm text-blue-100 mt-1">

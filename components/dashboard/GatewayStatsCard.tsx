@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Shield, Zap, TrendingUp, DollarSign, CheckCircle, XCircle, Target } from 'lucide-react'
+import { Zap, TrendingUp, DollarSign, CheckCircle, XCircle, Target } from 'lucide-react'
 import { motion } from 'framer-motion'
+import Image from 'next/image'
 
 interface GatewayStats {
   gateway: string
@@ -115,7 +116,13 @@ export default function GatewayStatsCard({ startDate, endDate, days = 30 }: Gate
           className="bg-gradient-to-br from-blue-600/10 to-blue-500/5 border border-blue-500/20 rounded-xl p-4"
         >
           <div className="flex items-center gap-2 mb-3">
-            <Shield className="w-5 h-5 text-blue-400" />
+            <Image 
+              src="/mercado-pago-logo.png" 
+              alt="Mercado Pago" 
+              width={24} 
+              height={24}
+              className="object-contain"
+            />
             <span className="text-sm font-semibold text-blue-300">Mercado Pago</span>
           </div>
           
