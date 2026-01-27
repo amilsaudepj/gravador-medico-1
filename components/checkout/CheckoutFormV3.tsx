@@ -216,10 +216,10 @@ export default function CheckoutFormV3({
   // 💳 TOKENIZAÇÃO APPMAX
   // =====================================================
   const tokenizeAppmax = async (): Promise<string> => {
-    // TEMPORÁRIO: Retornar token mock (CORS bloqueia em localhost)
-    console.log('⚠️ MODO DE TESTE: Usando token mock do AppMax (CORS em localhost)');
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return `mock_appmax_token_${Date.now()}`;
+    // AppMax não usa tokenização como MP
+    // O backend vai processar diretamente com os dados criptografados
+    console.log('✅ AppMax: Dados serão processados no backend');
+    return 'appmax_direct_payment';
   };
 
   // =====================================================
