@@ -146,13 +146,22 @@ async function checkAuth(request: NextRequest): Promise<{
     
     console.log('🔑 Middleware: Cookie auth_token encontrado');
     
-    // Verificar JWT customizado (não usar Supabase Auth aqui)
-    const jwt = require('jsonwebtoken');
-    const jwtSecret = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-    
+    // Decodificar JWT manualmente (sem biblioteca)
     try {
-      const decoded = jwt.verify(token, jwtSecret) as any;
-      console.log('✅ Middleware: Token JWT válido', { email: decoded.email });
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        console.log('❌ Middleware: Token JWT inválido (formato)');
+        return { authenticated: false };
+      }
+      
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      console.log('✅ Middleware: Token JWT decodificado', { email: payload.email });
+      
+      // Verificar expiração
+      if (payload.exp && payload.exp < Date.now() / 1000) {
+        console.log('❌ Middleware: Token JWT expirado');
+        return { authenticated: false };
+      }
       
       // Verificar se usuário é admin no Supabase
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()!;
@@ -163,7 +172,7 @@ async function checkAuth(request: NextRequest): Promise<{
       const { data: user, error } = await supabase
         .from('users')
         .select('*')
-        .eq('email', decoded.email)
+        .eq('email', payload.email)
         .single();
       
       if (error || !user) {
@@ -176,7 +185,7 @@ async function checkAuth(request: NextRequest): Promise<{
       
       return { authenticated: true, user, isAdmin };
     } catch (jwtError) {
-      console.error('❌ Middleware: Token JWT inválido:', jwtError);
+      console.error('❌ Middleware: Erro ao decodificar JWT:', jwtError);
       return { authenticated: false };
     }
   } catch (error) {
