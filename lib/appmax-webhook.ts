@@ -6,6 +6,7 @@ import {
   createLovableUser, 
   generateSecurePassword 
 } from '@/services/lovable-integration'
+import { createAndSaveRedirectUrl } from './redirect-helper'
 
 interface AppmaxWebhookResult {
   response: NextResponse
@@ -799,6 +800,28 @@ export async function handleAppmaxWebhook(request: NextRequest, endpoint: string
           }
         })
       }
+    }
+  }
+
+  // =====================================================
+  // 🔄 CRIAR URL DE REDIRECIONAMENTO (PÁGINA DE OBRIGADO)
+  // =====================================================
+  if (SUCCESS_STATUSES.has(status) && customerEmail) {
+    try {
+      const redirectUrl = await createAndSaveRedirectUrl({
+        orderId: orderId || `appmax-${Date.now()}`,
+        customerEmail: customerEmail,
+        customerName: customerName || undefined,
+        paymentMethod: paymentMethod || 'unknown',
+        amount: totalAmount,
+        status: status as 'paid' | 'approved' | 'completed'
+      })
+      
+      if (redirectUrl) {
+        console.log(`✅ URL de obrigado criada: ${redirectUrl}`)
+      }
+    } catch (redirectError: any) {
+      console.error('❌ Erro ao criar URL de redirecionamento:', redirectError)
     }
   }
 

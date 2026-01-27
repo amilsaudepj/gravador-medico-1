@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { MercadoPagoWebhookSchema } from '@/lib/validators/checkout';
+import { createAndSaveRedirectUrl } from '@/lib/redirect-helper';
 
 // =====================================================
 // 🔐 VALIDAÇÃO DE ASSINATURA (HMAC SHA-256)
@@ -321,7 +322,23 @@ export async function POST(request: NextRequest) {
     }
     
     // ==================================================
-    // 8️⃣ MARCAR WEBHOOK COMO PROCESSADO
+    // 8️⃣ CRIAR URL DE REDIRECIONAMENTO
+    // ==================================================
+    const redirectUrl = await createAndSaveRedirectUrl({
+      orderId: order.id,
+      customerEmail: order.customer_email,
+      customerName: order.customer_name || undefined,
+      paymentMethod: order.payment_method || 'credit_card',
+      amount: order.total_amount,
+      status: 'paid'
+    });
+    
+    if (redirectUrl) {
+      console.log(`[${order.id}] 🔄 URL de obrigado criada: ${redirectUrl}`);
+    }
+    
+    // ==================================================
+    // 9️⃣ MARCAR WEBHOOK COMO PROCESSADO
     // ==================================================
     if (webhookLog) {
       await supabaseAdmin

@@ -10,32 +10,43 @@ import { handleMercadoPagoWebhookEnterprise } from '@/lib/mercadopago-webhook-en
 
 export async function POST(request: NextRequest) {
   console.log('📨 [WEBHOOK ROUTE] Recebendo notificação do Mercado Pago')
-
+  
   try {
-    // =====================================================
-    // 1️⃣ VALIDAR ASSINATURA (Opcional mas recomendado)
-    // =====================================================
+    // Clonar request para ler body múltiplas vezes
+    const body = await request.json()
     
-    // const signature = request.headers.get('x-signature')
-    // const signatureId = request.headers.get('x-request-id')
-    
-    // TODO: Implementar validação de assinatura do MP
-    // if (!validateMercadoPagoSignature(signature, signatureId, body)) {
-    //   return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-    // }
+    console.log('📦 Body recebido:', JSON.stringify(body, null, 2))
+    console.log('📋 Headers:', {
+      'x-signature': request.headers.get('x-signature'),
+      'x-request-id': request.headers.get('x-request-id')
+    })
+    console.log('📦 Body recebido:', JSON.stringify(body, null, 2))
+    console.log('📋 Headers:', {
+      'x-signature': request.headers.get('x-signature'),
+      'x-request-id': request.headers.get('x-request-id')
+    })
+
+    // Recriar Request com o body já parseado
+    const newRequest = new NextRequest(request.url, {
+      method: 'POST',
+      headers: request.headers,
+      body: JSON.stringify(body)
+    })
 
     // =====================================================
-    // 2️⃣ PROCESSAR WEBHOOK
+    // PROCESSAR WEBHOOK
     // =====================================================
     
-    const result = await handleMercadoPagoWebhookEnterprise(request)
+    const result = await handleMercadoPagoWebhookEnterprise(newRequest)
+
+    console.log('✅ Resultado do processamento:', result)
 
     // =====================================================
-    // 3️⃣ RETORNAR RESPOSTA SIMPLES (MP espera 200 limpo)
+    // RETORNAR RESPOSTA SIMPLES
     // =====================================================
     
-    // Mercado Pago espera apenas HTTP 200, resposta simples
-    if (result.status === 200) {
+    if (result.status === 200 || result.status === 202) {
+      console.log('✅ Retornando 200 OK')
       return new NextResponse('OK', { status: 200 })
     }
     
