@@ -432,7 +432,7 @@ export const WelcomeEmail: React.FC<Readonly<WelcomeEmailProps>> = ({
 
                       <a                      Bem-vindo ao Gravador Médico!      'mercadopago': 'Mercado Pago',                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ backgroundColor: '#f8fafc', border: '2px solid #e5e7eb', borderRadius: '8px', marginBottom: '30px' }}>
 
-                        href="https://app.gravadormedico.com.br"
+                        href="https://gravadormedico.com"
 
                         style={{                    </h1>
 

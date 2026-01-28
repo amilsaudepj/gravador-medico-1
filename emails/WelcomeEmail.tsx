@@ -114,7 +114,7 @@ export const WelcomeEmail: React.FC<Readonly<WelcomeEmailProps>> = ({
                           </div>
                         </div>
                         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                          <a href="https://app.gravadormedico.com.br" style={{ display: 'inline-block', backgroundColor: colors.primary, color: '#FFFFFF', padding: '16px 40px', borderRadius: '8px', textDecoration: 'none', fontWeight: 600, fontSize: '16px' }}>
+                          <a href="https://gravadormedico.com" style={{ display: 'inline-block', backgroundColor: colors.primary, color: '#FFFFFF', padding: '16px 40px', borderRadius: '8px', textDecoration: 'none', fontWeight: 600, fontSize: '16px' }}>
                             Acessar Plataforma →
                           </a>
                         </div>
