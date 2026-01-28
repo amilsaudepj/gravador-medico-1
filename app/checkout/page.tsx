@@ -995,7 +995,9 @@ export default function CheckoutPage() {
                         />
                       </div>
 
-                      {/* Tipo de Documento - Botões de seleção */}
+                      {/* SELETOR CPF/CNPJ - DESATIVADO TEMPORARIAMENTE POR QUESTÕES FISCAIS
+                          Para reativar, descomente este bloco e comente o campo CPF fixo abaixo
+                      
                       <div className="min-w-0">
                         <label className="block text-sm font-bold text-gray-900 mb-2">
                           Tipo de Documento *
@@ -1034,8 +1036,55 @@ export default function CheckoutPage() {
                         </div>
                       </div>
                     </div>
+                    FIM DO SELETOR CPF/CNPJ DESATIVADO */}
+                    </div>
 
-                    {/* Campo CPF/CNPJ - Linha separada para melhor visualização */}
+                    {/* Campo CPF - Versão simplificada (apenas CPF) */}
+                    <div className="min-w-0">
+                      <label className="block text-sm font-bold text-gray-900 mb-2">
+                        CPF *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="cpf"
+                          autoComplete="off"
+                          value={formData.cpf}
+                          onChange={(e) => {
+                            const formatted = formatCPF(e.target.value)
+                            setFormData({ ...formData, cpf: formatted })
+                            if (formErrors.cpf) {
+                              setFormErrors({ ...formErrors, cpf: "" })
+                            }
+                          }}
+                          onBlur={(e) => {
+                            handleSaveAbandonedCart()
+                            const doc = e.target.value.replace(/\D/g, '')
+                            if (doc.length === 11 && !validateCPF(doc)) {
+                              setFormErrors({ ...formErrors, cpf: "CPF inválido" })
+                            } else if (doc.length > 0 && doc.length < 11) {
+                              setFormErrors({ ...formErrors, cpf: "CPF incompleto" })
+                            } else {
+                              setFormErrors({ ...formErrors, cpf: "" })
+                            }
+                          }}
+                          className={`w-full max-w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 ${
+                            formErrors.cpf ? 'border-red-500' : 'border-gray-200'
+                          } rounded-xl focus:border-brand-500 focus:outline-none transition-colors text-sm md:text-base box-border`}
+                          placeholder="000.000.000-00"
+                          maxLength={14}
+                          required
+                        />
+                      </div>
+                      {formErrors.cpf && (
+                        <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-4 h-4" />
+                          {formErrors.cpf}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* CAMPO CPF/CNPJ COM CONSULTA AUTOMÁTICA - DESATIVADO TEMPORARIAMENTE
                     <div className="min-w-0">
                       <label className="block text-sm font-bold text-gray-900 mb-2">
                         {formData.documentType === 'CNPJ' ? 'CNPJ *' : 'CPF *'}
@@ -1114,7 +1163,6 @@ export default function CheckoutPage() {
                             maxLength={formData.documentType === 'CNPJ' ? 18 : 14}
                             required
                           />
-                          {/* Indicador de loading dentro do input */}
                           {cnpjLoading && (
                             <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                               <Loader2 className="w-5 h-5 animate-spin text-brand-500" />
@@ -1135,7 +1183,6 @@ export default function CheckoutPage() {
                         )}
                     </div>
 
-                    {/* Campo Razão Social - Apenas para CNPJ */}
                     {formData.documentType === 'CNPJ' && (
                       <div className="min-w-0">
                         <label className="block text-sm font-bold text-gray-900 mb-2">
@@ -1166,6 +1213,7 @@ export default function CheckoutPage() {
                         )}
                       </div>
                     )}
+                    FIM DO CAMPO CPF/CNPJ COM CONSULTA AUTOMÁTICA - DESATIVADO */}
                   </div>
 
                   <button
