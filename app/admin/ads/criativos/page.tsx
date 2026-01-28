@@ -61,6 +61,7 @@ const sortOptions = [
 
 export default function CriativosPage() {
   const [ads, setAds] = useState<CampaignInsight[]>([]);
+  const [creativeUrls, setCreativeUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('last_7d');
@@ -74,6 +75,17 @@ export default function CriativosPage() {
       const res = await fetch(`/api/ads/insights?period=${selectedPeriod}&level=ad`);
       const data = await res.json();
       setAds(Array.isArray(data) ? data : []);
+      
+      // Buscar URLs dos criativos
+      if (data.length > 0) {
+        const adIds = data.map((ad: any) => ad.ad_id).filter(Boolean).join(',');
+        if (adIds) {
+          const creativesRes = await fetch(`/api/ads/creatives?adIds=${adIds}`);
+          const creativesData = await creativesRes.json();
+          setCreativeUrls(creativesData);
+        }
+      }
+      
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Erro ao carregar criativos:', error);
@@ -121,9 +133,12 @@ export default function CriativosPage() {
       outbound_clicks: 0,
       purchases: 0,
       revenue: 0,
+      leads: 0,
       cpm: 0,
       ctr: 0,
       cpc: 0,
+      cpl: 0,
+      checkoutComplete: 0,
     };
     
     ads.forEach(ad => {
@@ -146,6 +161,20 @@ export default function CriativosPage() {
       );
       result.purchases += Number(purchases?.value || 0);
       
+      // Leads
+      const leads = ad.actions?.find(a => 
+        a.action_type === 'lead' || 
+        a.action_type === 'offsite_conversion.fb_pixel_lead'
+      );
+      result.leads += Number(leads?.value || 0);
+      
+      // Checkout Complete (InitiateCheckout)
+      const checkoutComplete = ad.actions?.find(a => 
+        a.action_type === 'omni_initiated_checkout' ||
+        a.action_type === 'offsite_conversion.fb_pixel_initiate_checkout'
+      );
+      result.checkoutComplete += Number(checkoutComplete?.value || 0);
+      
       // Receita
       const purchaseValue = ad.action_values?.find(a => 
         a.action_type === 'purchase' || 
@@ -159,6 +188,7 @@ export default function CriativosPage() {
     result.cpm = result.impressions > 0 ? (result.spend / result.impressions) * 1000 : 0;
     result.ctr = result.impressions > 0 ? (result.clicks / result.impressions) * 100 : 0;
     result.cpc = result.clicks > 0 ? result.spend / result.clicks : 0;
+    result.cpl = result.leads > 0 ? result.spend / result.leads : 0;
     
     return result;
   }, [ads]);
@@ -218,17 +248,19 @@ export default function CriativosPage() {
           <p className="text-xs text-pink-300 mb-1">QTD de Anúncios</p>
           <p className="text-2xl font-bold text-white">{totals.count}</p>
         </div>
-        <div className="bg-gradient-to-br from-gray-700/40 to-gray-800/60 rounded-2xl border border-gray-600/30 p-4">
-          <p className="text-xs text-gray-300 mb-1">CPM</p>
+        <div className="bg-gradient-to-br from-blue-500/20 to-cyan-600/20 rounded-2xl border border-blue-500/30 p-4">
+          <p className="text-xs text-blue-300 mb-1">CPM</p>
           <p className="text-2xl font-bold text-white">{formatCurrency(totals.cpm)}</p>
         </div>
-        <div className="bg-gradient-to-br from-gray-700/40 to-gray-800/60 rounded-2xl border border-gray-600/30 p-4">
-          <p className="text-xs text-gray-300 mb-1">CTR</p>
-          <p className="text-2xl font-bold text-white">{totals.ctr.toFixed(2)}%</p>
+        <div className="bg-gradient-to-br from-purple-500/20 to-violet-600/20 rounded-2xl border border-purple-500/30 p-4">
+          <p className="text-xs text-purple-300 mb-1">CPL</p>
+          <p className="text-2xl font-bold text-white">
+            {totals.leads > 0 ? formatCurrency(totals.cpl) : '—'}
+          </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-700/40 to-gray-800/60 rounded-2xl border border-gray-600/30 p-4">
-          <p className="text-xs text-gray-300 mb-1">CPC</p>
-          <p className="text-2xl font-bold text-white">{formatCurrency(totals.cpc)}</p>
+        <div className="bg-gradient-to-br from-orange-500/20 to-amber-600/20 rounded-2xl border border-orange-500/30 p-4">
+          <p className="text-xs text-orange-300 mb-1">Finalizações</p>
+          <p className="text-2xl font-bold text-white">{formatNumber(totals.checkoutComplete)}</p>
         </div>
         <div className="bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-2xl border border-green-500/30 p-4">
           <p className="text-xs text-green-300 mb-1">Compras</p>
@@ -263,14 +295,15 @@ export default function CriativosPage() {
               <thead>
                 <tr className="bg-white/5">
                   <th className="text-left text-xs font-semibold text-gray-400 px-4 py-3">Anúncio</th>
+                  <th className="text-left text-xs font-semibold text-gray-400 px-4 py-3">URL do Criativo</th>
                   <th className="text-left text-xs font-semibold text-gray-400 px-4 py-3">Status</th>
                   <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Gasto</th>
-                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Alcance</th>
-                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Cliques</th>
-                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Cliq. Saída</th>
-                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">CPC</th>
-                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">CTR</th>
                   <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Impressões</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">CPM</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Cliques</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">CTR</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">CPL</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Finalizações</th>
                   <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Compras</th>
                   <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Receita</th>
                   <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Custo/Compra</th>
@@ -284,6 +317,7 @@ export default function CriativosPage() {
                   const clicks = Number(ad.clicks || 0);
                   const ctr = Number(ad.ctr || 0);
                   const cpc = Number(ad.cpc || 0);
+                  const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
                   
                   // Cliques de saída (outbound clicks)
                   const outboundClicks = ad.outbound_clicks?.reduce(
@@ -298,6 +332,21 @@ export default function CriativosPage() {
                   );
                   const purchaseCount = Number(purchases?.value || 0);
                   
+                  // Extrair leads
+                  const leads = ad.actions?.find(a => 
+                    a.action_type === 'lead' || 
+                    a.action_type === 'offsite_conversion.fb_pixel_lead'
+                  );
+                  const leadCount = Number(leads?.value || 0);
+                  const cpl = leadCount > 0 ? spend / leadCount : 0;
+                  
+                  // Extrair finalizações de checkout
+                  const checkoutComplete = ad.actions?.find(a => 
+                    a.action_type === 'omni_initiated_checkout' ||
+                    a.action_type === 'offsite_conversion.fb_pixel_initiate_checkout'
+                  );
+                  const checkoutCount = Number(checkoutComplete?.value || 0);
+                  
                   // Extrair valor das compras
                   const purchaseValue = ad.action_values?.find(a => 
                     a.action_type === 'purchase' || 
@@ -307,6 +356,7 @@ export default function CriativosPage() {
                   const purchaseAmount = Number(purchaseValue?.value || 0);
                   
                   const status = (ad as any).effective_status || 'UNKNOWN';
+                  const creativeUrl = creativeUrls[ad.ad_id || ''];
                   
                   return (
                     <motion.tr
@@ -320,15 +370,34 @@ export default function CriativosPage() {
                         <p className="font-medium text-white text-sm">{ad.ad_name || 'Sem nome'}</p>
                       </td>
                       <td className="px-4 py-3">
+                        {creativeUrl ? (
+                          <a 
+                            href={creativeUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Ver Criativo
+                          </a>
+                        ) : (
+                          <span className="text-gray-500 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
                         <StatusBadge status={status} />
                       </td>
                       <td className="text-right px-4 py-3 text-green-400 font-medium">{formatCurrency(spend)}</td>
-                      <td className="text-right px-4 py-3 text-indigo-400">{formatNumber(reach)}</td>
-                      <td className="text-right px-4 py-3 text-white">{formatNumber(clicks)}</td>
-                      <td className="text-right px-4 py-3 text-cyan-400">{formatNumber(outboundClicks)}</td>
-                      <td className="text-right px-4 py-3 text-orange-400">{formatCurrency(cpc)}</td>
-                      <td className="text-right px-4 py-3 text-purple-400">{ctr.toFixed(2)}%</td>
                       <td className="text-right px-4 py-3 text-gray-400">{formatNumber(impressions)}</td>
+                      <td className="text-right px-4 py-3 text-blue-400">{formatCurrency(cpm)}</td>
+                      <td className="text-right px-4 py-3 text-white">{formatNumber(clicks)}</td>
+                      <td className="text-right px-4 py-3 text-purple-400">{ctr.toFixed(2)}%</td>
+                      <td className="text-right px-4 py-3 text-violet-400">
+                        {leadCount > 0 ? formatCurrency(cpl) : <span className="text-gray-500">—</span>}
+                      </td>
+                      <td className="text-right px-4 py-3 text-orange-400">
+                        {checkoutCount > 0 ? formatNumber(checkoutCount) : <span className="text-gray-500">0</span>}
+                      </td>
                       <td className="text-right px-4 py-3">
                         {purchaseCount > 0 ? (
                           <span className="font-semibold text-emerald-400">{purchaseCount}</span>
@@ -357,15 +426,16 @@ export default function CriativosPage() {
                 <tr className="border-t-2 border-white/20 bg-white/5 font-bold">
                   <td className="px-4 py-3 text-white">Total geral</td>
                   <td className="px-4 py-3">-</td>
+                  <td className="px-4 py-3">-</td>
                   <td className="text-right px-4 py-3 text-green-400">{formatCurrency(totals.spend)}</td>
-                  <td className="text-right px-4 py-3 text-indigo-400">{formatNumber(totals.reach)}</td>
-                  <td className="text-right px-4 py-3 text-white">{formatNumber(totals.clicks)}</td>
-                  <td className="text-right px-4 py-3 text-cyan-400">{formatNumber(totals.outbound_clicks)}</td>
-                  <td className="text-right px-4 py-3 text-orange-400">
-                    {totals.clicks > 0 ? formatCurrency(totals.spend / totals.clicks) : '—'}
-                  </td>
-                  <td className="text-right px-4 py-3 text-purple-400">{totals.ctr.toFixed(2)}%</td>
                   <td className="text-right px-4 py-3 text-gray-400">{formatNumber(totals.impressions)}</td>
+                  <td className="text-right px-4 py-3 text-blue-400">{formatCurrency(totals.cpm)}</td>
+                  <td className="text-right px-4 py-3 text-white">{formatNumber(totals.clicks)}</td>
+                  <td className="text-right px-4 py-3 text-purple-400">{totals.ctr.toFixed(2)}%</td>
+                  <td className="text-right px-4 py-3 text-violet-400">
+                    {totals.leads > 0 ? formatCurrency(totals.cpl) : '—'}
+                  </td>
+                  <td className="text-right px-4 py-3 text-orange-400">{formatNumber(totals.checkoutComplete)}</td>
                   <td className="text-right px-4 py-3 text-emerald-400">{formatNumber(totals.purchases)}</td>
                   <td className="text-right px-4 py-3 text-yellow-400">{formatCurrency(totals.revenue)}</td>
                   <td className="text-right px-4 py-3 text-pink-400">

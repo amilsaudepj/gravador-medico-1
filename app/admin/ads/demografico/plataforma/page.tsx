@@ -25,9 +25,9 @@ const periodOptions = [
 
 // Dados de exemplo
 const mockPlatformData = [
-  { plataforma: 'Instagram', investimento: 3500, impressoes: 165000, cliques: 2800, conversoes: 580 },
-  { plataforma: 'Facebook', investimento: 1800, impressoes: 52000, cliques: 580, conversoes: 270 },
-  { plataforma: 'Audience Network', investimento: 150, impressoes: 3000, cliques: 46, conversoes: 17 },
+  { plataforma: 'Instagram', investimento: 3500, impressoes: 165000, cliques: 2800, conversoes: 580, leads: 480, finalizacoes: 420 },
+  { plataforma: 'Facebook', investimento: 1800, impressoes: 52000, cliques: 580, conversoes: 270, leads: 220, finalizacoes: 195 },
+  { plataforma: 'Audience Network', investimento: 150, impressoes: 3000, cliques: 46, conversoes: 17, leads: 12, finalizacoes: 10 },
 ];
 
 export default function PlataformaPage() {
@@ -37,10 +37,38 @@ export default function PlataformaPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch(`/api/ads/demographics?period=${selectedPeriod}&breakdown=publisher_platform`);
+      const apiData = await res.json();
+      
+      if (apiData.error) {
+        console.error('Erro da API:', apiData.error);
+        setData(mockPlatformData);
+      } else if (Array.isArray(apiData) && apiData.length > 0) {
+        // Mapear dados da API para o formato esperado
+        const formattedData = apiData.map((item: any) => ({
+          plataforma: item.publisher_platform === 'instagram' ? 'Instagram' :
+                      item.publisher_platform === 'facebook' ? 'Facebook' :
+                      item.publisher_platform === 'audience_network' ? 'Audience Network' :
+                      item.publisher_platform === 'messenger' ? 'Messenger' :
+                      item.publisher_platform || 'Outros',
+          investimento: item.investimento,
+          impressoes: item.impressoes,
+          cliques: item.cliques,
+          conversoes: item.conversoes,
+          leads: item.leads,
+          finalizacoes: item.finalizacoes,
+        }));
+        setData(formattedData);
+      } else {
+        setData(mockPlatformData);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
       setData(mockPlatformData);
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   }, [selectedPeriod]);
 
   useEffect(() => {
@@ -128,36 +156,38 @@ export default function PlataformaPage() {
                 <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Cliques</th>
                 <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">CTR</th>
                 <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">CPC</th>
-                <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Conversões</th>
-                <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Taxa de Conversão</th>
                 <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">CPL</th>
+                <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Finalizações</th>
+                <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Conversões</th>
+                <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">Taxa Conv.</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} className="p-8"><Skeleton className="h-16 bg-white/10" /></td></tr>
+                <tr><td colSpan={11} className="p-8"><Skeleton className="h-16 bg-white/10" /></td></tr>
               ) : data.length === 0 ? (
-                <tr><td colSpan={10} className="p-8 text-center text-gray-400">Não há dados</td></tr>
+                <tr><td colSpan={11} className="p-8 text-center text-gray-400">Não há dados</td></tr>
               ) : (
                 data.map((row, idx) => {
                   const cpm = row.impressoes > 0 ? (row.investimento / row.impressoes) * 1000 : 0;
                   const ctr = row.impressoes > 0 ? (row.cliques / row.impressoes) * 100 : 0;
                   const cpc = row.cliques > 0 ? row.investimento / row.cliques : 0;
+                  const cpl = row.leads > 0 ? row.investimento / row.leads : 0;
                   const convRate = row.cliques > 0 ? (row.conversoes / row.cliques) * 100 : 0;
-                  const cpl = row.conversoes > 0 ? row.investimento / row.conversoes : 0;
                   
                   return (
                     <tr key={idx} className="border-t border-white/5 hover:bg-white/5">
                       <td className="px-4 py-3 text-white font-medium">{row.plataforma}</td>
                       <td className="text-right px-4 py-3 text-green-400">{formatCurrency(row.investimento)}</td>
                       <td className="text-right px-4 py-3 text-gray-300">{formatNumber(row.impressoes)}</td>
-                      <td className="text-right px-4 py-3 text-gray-400">{formatCurrency(cpm)}</td>
-                      <td className="text-right px-4 py-3 text-blue-400">{formatNumber(row.cliques)}</td>
+                      <td className="text-right px-4 py-3 text-blue-400">{formatCurrency(cpm)}</td>
+                      <td className="text-right px-4 py-3 text-white">{formatNumber(row.cliques)}</td>
                       <td className="text-right px-4 py-3 text-purple-400">{ctr.toFixed(2)}%</td>
                       <td className="text-right px-4 py-3 text-gray-400">{formatCurrency(cpc)}</td>
-                      <td className="text-right px-4 py-3 text-orange-400">{formatNumber(row.conversoes)}</td>
+                      <td className="text-right px-4 py-3 text-violet-400">{formatCurrency(cpl)}</td>
+                      <td className="text-right px-4 py-3 text-orange-400">{formatNumber(row.finalizacoes)}</td>
+                      <td className="text-right px-4 py-3 text-emerald-400">{formatNumber(row.conversoes)}</td>
                       <td className="text-right px-4 py-3 text-cyan-400">{convRate.toFixed(2)}%</td>
-                      <td className="text-right px-4 py-3 text-gray-400">{formatCurrency(cpl)}</td>
                     </tr>
                   );
                 })
