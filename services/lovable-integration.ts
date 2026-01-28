@@ -155,6 +155,7 @@ export async function listLovableUsers(): Promise<{
 export async function createLovableUser(payload: CreateUserPayload): Promise<{
   success: boolean
   user?: LovableUser
+  alreadyExists?: boolean
   error?: string
 }> {
   const startTime = Date.now()
@@ -174,6 +175,26 @@ export async function createLovableUser(payload: CreateUserPayload): Promise<{
     const duration = Date.now() - startTime
     const data = await response.json()
 
+    // Se usuário já existe, retornar sucesso com flag alreadyExists
+    if (!response.ok && (data.error?.includes('já existe') || data.error?.includes('already'))) {
+      console.log('ℹ️ Usuário já existe no Lovable:', payload.email)
+      
+      await logAction({
+        action: 'create_user',
+        status: 'success',
+        recipient_email: payload.email,
+        details: { duration, full_name: payload.full_name, already_exists: true },
+        http_status_code: response.status,
+        request_payload: { email: payload.email, full_name: payload.full_name },
+        response_payload: data,
+      })
+      
+      return {
+        success: true,
+        alreadyExists: true,
+      }
+    }
+
     // Log da ação
     await logAction({
       action: 'create_user',
@@ -187,7 +208,7 @@ export async function createLovableUser(payload: CreateUserPayload): Promise<{
     })
 
     if (!response.ok) {
-      throw new Error(data.message || 'Erro ao criar usuário')
+      throw new Error(data.error || data.message || 'Erro ao criar usuário')
     }
 
     return {

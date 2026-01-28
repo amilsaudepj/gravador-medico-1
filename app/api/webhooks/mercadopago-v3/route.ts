@@ -12,6 +12,7 @@ import { MercadoPagoWebhookSchema } from '@/lib/validators/checkout';
 import { createAndSaveRedirectUrl } from '@/lib/redirect-helper';
 import { sendWelcomeEmail as sendEmailWithTemplate } from '@/lib/email';
 import { sendPurchaseEvent } from '@/lib/meta-capi';
+import { createLovableUser, generateSecurePassword } from '@/services/lovable-integration';
 
 // =====================================================
 // 📊 CONSTANTES E MAPEAMENTOS
@@ -86,74 +87,7 @@ function validateWebhookSignature(
 // =====================================================
 // 🚀 PROVISIONAMENTO LOVABLE
 // =====================================================
-async function provisionLovableAccount(
-  orderId: string,
-  email: string,
-  name: string
-): Promise<{ success: boolean; credentials?: any; error?: string }> {
-  try {
-    // Chamar Edge Function do Lovable
-    const response = await fetch(
-      `${process.env.LOVABLE_API_URL}/functions/v1/admin-user-manager`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-secret': process.env.LOVABLE_API_SECRET!,
-        },
-        body: JSON.stringify({
-          email,
-          autoConfirm: true,
-          metadata: {
-            name,
-            order_id: orderId,
-            source: 'gravador-medico',
-          },
-        }),
-      }
-    );
-    
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Lovable API error: ${error}`);
-    }
-    
-    const data = await response.json();
-    
-    // Registrar sucesso
-    await supabaseAdmin.from('integration_logs').insert({
-      order_id: orderId,
-      action: 'user_creation',
-      status: 'success',
-      details: {
-        lovable_user_id: data.user.id,
-        email: data.user.email,
-      },
-    });
-    
-    return {
-      success: true,
-      credentials: data.credentials,
-    };
-  } catch (error: any) {
-    console.error('Provisioning error:', error);
-    
-    // Registrar erro para retry posterior
-    await supabaseAdmin.from('integration_logs').insert({
-      order_id: orderId,
-      action: 'user_creation',
-      status: 'error',
-      error_message: error.message,
-      retry_count: 0,
-      next_retry_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 min
-    });
-    
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
+// NOTA: Usando createLovableUser e generateSecurePassword de @/services/lovable-integration
 
 // =====================================================
 // 🎯 MAIN WEBHOOK HANDLER
@@ -460,7 +394,7 @@ export async function POST(request: NextRequest) {
     // ==================================================
     // 1️⃣1️⃣ PROVISIONAMENTO AUTOMÁTICO (SE CONFIGURADO)
     // ==================================================
-    let provisionResult: { success: boolean; credentials?: any; error?: string } = { 
+    let provisionResult: { success: boolean; credentials?: { email: string; password: string }; error?: string } = { 
       success: false, 
       credentials: undefined, 
       error: undefined 
@@ -469,11 +403,56 @@ export async function POST(request: NextRequest) {
     if (customerEmail && customerName && process.env.LOVABLE_API_URL) {
       console.log(`[${saleId || paymentId}] Iniciando provisionamento...`);
       
-      provisionResult = await provisionLovableAccount(
-        saleId || paymentId,
-        customerEmail,
-        customerName
-      );
+      try {
+        // Gerar senha segura
+        const generatedPassword = generateSecurePassword();
+        
+        // Criar usuário no Lovable
+        const userResult = await createLovableUser({
+          email: customerEmail,
+          password: generatedPassword,
+          full_name: customerName
+        });
+        
+        if (userResult.success) {
+          provisionResult = {
+            success: true,
+            credentials: {
+              email: customerEmail,
+              password: generatedPassword
+            }
+          };
+          
+          if (userResult.alreadyExists) {
+            console.log(`[${saleId || paymentId}] ℹ️ Usuário já existe no Lovable - enviando email com nova senha`);
+          } else {
+            console.log(`[${saleId || paymentId}] ✅ Usuário criado no Lovable: ${userResult.user?.id}`);
+          }
+        } else {
+          provisionResult = {
+            success: false,
+            error: userResult.error || 'Erro desconhecido ao criar usuário'
+          };
+        }
+      } catch (error: any) {
+        console.error(`[${saleId || paymentId}] ❌ Erro no provisionamento:`, error);
+        provisionResult = {
+          success: false,
+          error: error.message
+        };
+        
+        // Registrar erro para retry posterior
+        await supabaseAdmin.from('integration_logs').insert({
+          action: 'user_creation',
+          status: 'error',
+          recipient_email: customerEmail,
+          error_message: error.message,
+          details: {
+            order_id: saleId || paymentId,
+            retry_count: 0
+          }
+        });
+      }
     }
     
     if (provisionResult.success && provisionResult.credentials) {
