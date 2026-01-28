@@ -400,8 +400,78 @@ Relatório gerado automaticamente pelo Gravador Médico
         </motion.div>
       </div>
 
-      {/* META Ads KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* ROI Card Destacado + META Ads KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        {/* ROI Card Grande */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.15 }}
+          className={`md:col-span-2 relative overflow-hidden rounded-2xl p-6 ${
+            metrics && fbMetrics?.totalSpend && metrics.totalApproved > 0
+              ? ((metrics.totalApproved - fbMetrics.totalSpend) / fbMetrics.totalSpend * 100) >= 0
+                ? 'bg-gradient-to-br from-green-600/30 to-emerald-700/30 border-2 border-green-500/40'
+                : 'bg-gradient-to-br from-red-600/30 to-rose-700/30 border-2 border-red-500/40'
+              : 'bg-gradient-to-br from-gray-700/40 to-gray-800/60 border border-gray-600/30'
+          }`}
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className={`p-2 rounded-xl ${
+                  metrics && fbMetrics?.totalSpend && metrics.totalApproved > 0
+                    ? ((metrics.totalApproved - fbMetrics.totalSpend) / fbMetrics.totalSpend * 100) >= 0
+                      ? 'bg-green-500/30'
+                      : 'bg-red-500/30'
+                    : 'bg-gray-500/30'
+                }`}>
+                  <TrendingUp className={`h-5 w-5 ${
+                    metrics && fbMetrics?.totalSpend && metrics.totalApproved > 0
+                      ? ((metrics.totalApproved - fbMetrics.totalSpend) / fbMetrics.totalSpend * 100) >= 0
+                        ? 'text-green-400'
+                        : 'text-red-400'
+                      : 'text-gray-400'
+                  }`} />
+                </div>
+                <span className={`text-lg font-semibold ${
+                  metrics && fbMetrics?.totalSpend && metrics.totalApproved > 0
+                    ? ((metrics.totalApproved - fbMetrics.totalSpend) / fbMetrics.totalSpend * 100) >= 0
+                      ? 'text-green-300'
+                      : 'text-red-300'
+                    : 'text-gray-300'
+                }`}>
+                  ROI ({periodLabel})
+                </span>
+              </div>
+            </div>
+            <div className={`text-4xl font-bold ${
+              metrics && fbMetrics?.totalSpend && metrics.totalApproved > 0
+                ? ((metrics.totalApproved - fbMetrics.totalSpend) / fbMetrics.totalSpend * 100) >= 0
+                  ? 'text-green-400'
+                  : 'text-red-400'
+                : 'text-gray-400'
+            }`}>
+              {analyticsLoading || loading ? '...' : (
+                fbMetrics?.totalSpend && fbMetrics.totalSpend > 0 && metrics?.totalApproved
+                  ? `${((metrics.totalApproved - fbMetrics.totalSpend) / fbMetrics.totalSpend * 100) >= 0 ? '+' : ''}${((metrics.totalApproved - fbMetrics.totalSpend) / fbMetrics.totalSpend * 100).toFixed(1)}%`
+                  : '0%'
+              )}
+            </div>
+            <div className="flex items-center gap-4 mt-3 text-sm">
+              <span className="text-gray-400">
+                Investido: <span className="text-white font-medium">{formatCurrencyCompact(fbMetrics?.totalSpend || 0)}</span>
+              </span>
+              <span className="text-gray-400">
+                Receita: <span className={`font-medium ${metrics?.totalApproved ? 'text-green-400' : 'text-gray-500'}`}>
+                  {formatCurrencyCompact(metrics?.totalApproved || 0)}
+                </span>
+              </span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* KPIs Meta Ads */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -444,25 +514,6 @@ Relatório gerado automaticamente pelo Gravador Médico
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-gradient-to-br from-gray-800/60 to-gray-900/80 backdrop-blur-xl rounded-2xl border border-white/10 p-4"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-purple-500/20">
-              <Eye className="h-5 w-5 text-purple-400" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Impressões</p>
-              <p className="text-xl font-bold text-white">
-                {analyticsLoading ? '...' : formatNumberCompact(fbMetrics?.totalImpressions || 0)}
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
           className="bg-gradient-to-br from-gray-800/60 to-gray-900/80 backdrop-blur-xl rounded-2xl border border-white/10 p-4"
         >
           <div className="flex items-center gap-3">
