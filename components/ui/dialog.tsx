@@ -65,8 +65,17 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
     
     if (!context?.open) return null
     
+    // Detectar se className tem override de max-w ou p-
+    const hasMaxWidth = className.includes('max-w-')
+    const hasPadding = className.includes('p-0') || className.includes('p-[')
+    
+    const baseClasses = `relative z-50 w-full rounded-lg border shadow-2xl animate-in fade-in-0 zoom-in-95`
+    const defaultMaxWidth = hasMaxWidth ? '' : 'max-w-lg'
+    const defaultPadding = hasPadding ? '' : 'p-6'
+    const defaultColors = 'border-gray-800 bg-gray-900'
+    
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
         <div 
           className="fixed inset-0 bg-black/80 backdrop-blur-sm"
@@ -76,7 +85,8 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
         {/* Content */}
         <div
           ref={ref}
-          className={`relative z-50 w-full max-w-lg rounded-lg border border-gray-800 bg-gray-900 p-6 shadow-2xl animate-in fade-in-0 zoom-in-95 ${className}`}
+          className={`${baseClasses} ${defaultMaxWidth} ${defaultPadding} ${defaultColors} ${className}`}
+          style={{ maxHeight: 'calc(100vh - 2rem)' }}
           {...props}
         >
           {children}

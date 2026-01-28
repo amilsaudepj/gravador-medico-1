@@ -464,11 +464,11 @@ export default function EmailManagementPage() {
 
       {/* Email Preview Dialog - Estilo Resend */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-5xl h-[90vh] bg-gray-900 border-gray-700 p-0 flex flex-col overflow-hidden">
+        <DialogContent className="max-w-5xl p-0 bg-gray-900 border-gray-700 flex flex-col" style={{ height: '85vh', maxHeight: '85vh' }}>
           {selectedEmail && (
             <div className="flex flex-col h-full overflow-hidden">
-              {/* Header do Email */}
-              <div className="border-b border-gray-700 p-6">
+              {/* Header do Email - fixo */}
+              <div className="border-b border-gray-700 p-6 flex-shrink-0">
                 <div className="flex items-start gap-4">
                   <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
                     <Mail className="w-8 h-8 text-white" />
@@ -511,8 +511,8 @@ export default function EmailManagementPage() {
                 </div>
               </div>
 
-              {/* Timeline de Eventos */}
-              <div className="border-b border-gray-700 p-6">
+              {/* Timeline de Eventos - fixo */}
+              <div className="border-b border-gray-700 p-6 flex-shrink-0">
                 <p className="text-gray-400 text-sm font-medium mb-4">EMAIL EVENTS</p>
                 <div className="flex items-center gap-4">
                   {loadingTimeline ? (
@@ -613,15 +613,11 @@ export default function EmailManagementPage() {
 
                   <TabsContent value="preview" className="flex-1 min-h-0 overflow-auto p-0 m-0">
                     {selectedEmail.html_content ? (
-                      <div className="bg-gray-100 p-4 min-h-full">
-                        <div className="max-w-[600px] mx-auto shadow-lg">
-                          <iframe
-                            srcDoc={selectedEmail.html_content}
-                            className="w-full min-h-[600px] h-auto border-0 bg-white rounded-lg"
-                            title="Email Preview"
-                            style={{ height: '100%', minHeight: '600px' }}
-                          />
-                        </div>
+                      <div className="bg-gray-100 p-4 overflow-auto h-full">
+                        <div 
+                          className="max-w-[600px] mx-auto bg-white rounded-lg shadow-lg overflow-hidden"
+                          dangerouslySetInnerHTML={{ __html: selectedEmail.html_content }}
+                        />
                       </div>
                     ) : (
                       <div className="bg-gray-100 p-4 min-h-full overflow-auto">
