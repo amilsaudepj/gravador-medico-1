@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import WelcomeEmail from '@/emails/WelcomeEmail'
 import { supabaseAdmin } from './supabase'
+import { render } from '@react-email/render'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -19,19 +20,30 @@ export interface SendWelcomeEmailParams {
  */
 export async function sendWelcomeEmail(params: SendWelcomeEmailParams) {
   try {
-    // Primeiro, enviar o e-mail
+    // Criar componente do email
+    const emailComponent = WelcomeEmail({
+      customerName: params.customerName,
+      userEmail: params.userEmail,
+      userPassword: params.userPassword,
+      orderId: params.orderId,
+      orderValue: params.orderValue,
+      paymentMethod: params.paymentMethod,
+    })
+
+    // Renderizar para HTML (para salvar no banco)
+    let htmlContent = ''
+    try {
+      htmlContent = await render(emailComponent)
+    } catch (renderError) {
+      console.warn('⚠️ Não foi possível renderizar HTML do email:', renderError)
+    }
+
+    // Enviar o e-mail
     const { data, error } = await resend.emails.send({
       from: 'Gravador Médico <suporte@gravadormedico.com.br>',
       to: params.to,
       subject: 'Bem-vindo ao Gravador Médico - Seus Dados de Acesso',
-      react: WelcomeEmail({
-        customerName: params.customerName,
-        userEmail: params.userEmail,
-        userPassword: params.userPassword,
-        orderId: params.orderId,
-        orderValue: params.orderValue,
-        paymentMethod: params.paymentMethod,
-      }) as any,
+      react: emailComponent as any,
     })
 
     if (error) {
@@ -42,6 +54,7 @@ export async function sendWelcomeEmail(params: SendWelcomeEmailParams) {
         recipient_email: params.to,
         recipient_name: params.customerName,
         subject: 'Bem-vindo ao Gravador Médico - Seus Dados de Acesso',
+        html_content: htmlContent || null,
         email_type: 'welcome',
         from_email: 'suporte@gravadormedico.com.br',
         from_name: 'Gravador Médico',
@@ -58,16 +71,13 @@ export async function sendWelcomeEmail(params: SendWelcomeEmailParams) {
       throw error
     }
 
-    // Salvar log de sucesso no banco (com tracking ativado)
-    const trackingPixelUrl = data?.id 
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/track/email/${data.id}/open`
-      : null;
-
+    // Salvar log de sucesso no banco (com HTML para preview)
     await supabaseAdmin.from('email_logs').insert({
       email_id: data?.id,
       recipient_email: params.to,
       recipient_name: params.customerName,
       subject: 'Bem-vindo ao Gravador Médico - Seus Dados de Acesso',
+      html_content: htmlContent || null,
       email_type: 'welcome',
       from_email: 'suporte@gravadormedico.com.br',
       from_name: 'Gravador Médico',
@@ -78,7 +88,6 @@ export async function sendWelcomeEmail(params: SendWelcomeEmailParams) {
         user_email: params.userEmail,
         order_value: params.orderValue,
         payment_method: params.paymentMethod,
-        tracking_pixel_url: trackingPixelUrl,
       },
     });
 

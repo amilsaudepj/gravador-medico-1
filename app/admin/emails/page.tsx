@@ -611,20 +611,98 @@ export default function EmailManagementPage() {
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="preview" className="flex-1 overflow-auto p-0 m-0">
+                  <TabsContent value="preview" className="flex-1 overflow-auto p-0 m-0 data-[state=active]:flex-1">
                     {selectedEmail.html_content ? (
-                      <iframe
-                        srcDoc={selectedEmail.html_content}
-                        className="w-full h-[400px] border-0 bg-white"
-                        title="Email Preview"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-[400px] text-gray-500">
-                        <div className="text-center">
-                          <Mail className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                          <p>Preview não disponível</p>
-                          <p className="text-sm text-gray-600 mt-2">O conteúdo HTML não foi salvo para este email</p>
+                      <div className="bg-gray-100 p-4 h-[450px] overflow-auto">
+                        <div className="max-w-[600px] mx-auto shadow-lg">
+                          <iframe
+                            srcDoc={selectedEmail.html_content}
+                            className="w-full h-[420px] border-0 bg-white rounded-lg"
+                            title="Email Preview"
+                          />
                         </div>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-100 p-4 h-[450px] overflow-auto">
+                        <div className="max-w-[600px] mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+                          {/* Header simulado do email */}
+                          <div className="bg-gradient-to-r from-teal-500 to-teal-600 p-8 text-center">
+                            <span className="text-4xl">🎙️</span>
+                            <h2 className="text-2xl font-bold text-white mt-4">Bem-vindo ao Gravador Médico!</h2>
+                            <p className="text-teal-100 mt-2">Seu acesso está pronto para uso</p>
+                          </div>
+                          
+                          {/* Corpo do email simulado */}
+                          <div className="p-8">
+                            <p className="text-gray-700 mb-4">
+                              Olá, <strong>{selectedEmail.recipient_name || 'Cliente'}</strong>! 👋
+                            </p>
+                            <p className="text-gray-600 mb-6">
+                              Sua compra foi confirmada com sucesso! Abaixo estão suas credenciais de acesso.
+                            </p>
+                            
+                            {/* Box de credenciais */}
+                            <div className="bg-teal-50 border border-teal-200 rounded-lg p-6 mb-6">
+                              <h3 className="text-teal-700 font-semibold mb-4">🔐 Suas Credenciais</h3>
+                              <div className="space-y-3">
+                                <div>
+                                  <p className="text-sm text-gray-500">E-mail</p>
+                                  <p className="font-mono bg-white px-3 py-2 rounded border text-gray-700">
+                                    {selectedEmail.metadata?.user_email || selectedEmail.recipient_email}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-500">Senha</p>
+                                  <p className="font-mono bg-white px-3 py-2 rounded border text-gray-400">
+                                    ••••••••••
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Botão */}
+                            <div className="text-center mb-6">
+                              <span className="inline-block bg-teal-500 text-white px-8 py-3 rounded-lg font-semibold">
+                                Acessar Plataforma →
+                              </span>
+                            </div>
+
+                            {/* Detalhes do pedido */}
+                            <div className="bg-gray-50 rounded-lg p-4 text-sm">
+                              <h4 className="font-semibold text-gray-700 mb-3">📋 Detalhes do Pedido</h4>
+                              <div className="space-y-2">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">Pedido</span>
+                                  <span className="font-medium text-gray-700">#{selectedEmail.order_id?.slice(0, 8).toUpperCase() || 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">Valor</span>
+                                  <span className="font-medium text-green-600">
+                                    {selectedEmail.metadata?.order_value 
+                                      ? `R$ ${Number(selectedEmail.metadata.order_value).toFixed(2)}`
+                                      : 'N/A'
+                                    }
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">Pagamento</span>
+                                  <span className="font-medium text-gray-700">
+                                    {selectedEmail.metadata?.payment_method?.toUpperCase() || 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer */}
+                          <div className="bg-gray-50 px-8 py-4 text-center border-t">
+                            <p className="text-sm text-gray-500">suporte@gravadormedico.com.br</p>
+                            <p className="text-xs text-gray-400 mt-2">© 2026 Gravador Médico</p>
+                          </div>
+                        </div>
+                        <p className="text-center text-xs text-gray-400 mt-4">
+                          ⚠️ Preview simulado - HTML original não foi salvo
+                        </p>
                       </div>
                     )}
                   </TabsContent>
