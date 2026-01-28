@@ -1,8 +1,9 @@
 import { supabase } from './supabase'
 
 /**
- * Salva ou atualiza um carrinho abandonado
- * Chamado automaticamente quando o usuário preenche email/telefone
+ * Salva ou atualiza um carrinho (status: pending enquanto preenche)
+ * O status só muda para 'abandoned' quando o cliente SAI da página sem comprar
+ * Ou para 'recovered' quando o cliente compra
  */
 export async function saveAbandonedCart(data: {
   customer_name?: string
@@ -17,6 +18,7 @@ export async function saveAbandonedCart(data: {
   utm_source?: string
   utm_medium?: string
   utm_campaign?: string
+  markAsAbandoned?: boolean // ✅ Novo: só true quando cliente SAIR da página
 }) {
   try {
     // Recuperar session_id do sessionStorage
@@ -31,7 +33,7 @@ export async function saveAbandonedCart(data: {
     // Isso permite capturar dados parciais mesmo sem email
     const { data: existing, error: searchError } = await supabase
       .from('abandoned_carts')
-      .select('id, customer_email')
+      .select('id, customer_email, status')
       .eq('session_id', sessionId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -42,13 +44,25 @@ export async function saveAbandonedCart(data: {
       console.error('Erro ao buscar carrinho existente:', searchError)
     }
 
+    // ✅ LÓGICA CORRIGIDA:
+    // - Começa como 'pending' (preenchendo dados)
+    // - Só muda para 'abandoned' se markAsAbandoned = true (cliente saiu)
+    // - Mantém status existente se já for 'recovered' ou 'abandoned'
+    let status = 'pending'
+    if (data.markAsAbandoned) {
+      status = 'abandoned'
+    } else if (existing?.status && existing.status !== 'pending') {
+      // Manter status existente se já foi marcado como abandoned ou recovered
+      status = existing.status
+    }
+
     const cartData = {
       customer_name: data.customer_name,
       customer_email: data.customer_email,
       customer_phone: data.customer_phone,
       customer_cpf: data.customer_cpf,
       step: data.step,
-      status: 'abandoned',
+      status: status,
       product_id: data.product_id,
       order_bumps: data.order_bumps || null,
       discount_code: data.discount_code,
@@ -101,33 +115,31 @@ export async function saveAbandonedCart(data: {
 }
 
 /**
- * Marca um carrinho como recuperado (quando o cliente compra)
+ * Remove o carrinho quando o cliente COMPRA
+ * Se comprou, não é carrinho abandonado - deve ser deletado!
  */
 export async function markCartAsRecovered(orderId: string) {
   try {
     const cartId = sessionStorage.getItem('abandoned_cart_id')
     
     if (!cartId) {
-      console.log('Nenhum carrinho abandonado para marcar como recuperado')
+      console.log('Nenhum carrinho para remover (cliente comprou)')
       return
     }
 
+    // ✅ DELETAR o registro - se comprou, NÃO é carrinho abandonado!
     const { error } = await supabase
       .from('abandoned_carts')
-      .update({
-        status: 'recovered',
-        recovered_at: new Date().toISOString(),
-        recovered_order_id: orderId,
-      })
+      .delete()
       .eq('id', cartId)
 
     if (error) {
-      console.error('Erro ao marcar carrinho como recuperado:', error)
+      console.error('Erro ao remover carrinho (compra realizada):', error)
     } else {
-      console.log('✅ Carrinho marcado como recuperado:', cartId, '→ Pedido:', orderId)
+      console.log('✅ Carrinho removido (cliente comprou):', cartId, '→ Pedido:', orderId)
       sessionStorage.removeItem('abandoned_cart_id')
     }
   } catch (error) {
-    console.error('Erro ao marcar carrinho como recuperado:', error)
+    console.error('Erro ao remover carrinho:', error)
   }
 }

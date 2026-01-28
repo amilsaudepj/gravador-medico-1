@@ -206,18 +206,19 @@ export default function CheckoutPage() {
   }, [pixData?.orderId, formData.email, router])
 
   // 🎯 CAPTURA AUTOMÁTICA: Salva carrinho quando usuário sai da página
+  // O status fica como 'pending' - um cron job marcará como 'abandoned' após 5 minutos
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Salva carrinho antes de sair se tiver dados
+      // ✅ Salva como PENDING - o cron marcará como abandoned após 5 min
       if (formData.email && formData.email.length >= 5) {
-        handleSaveAbandonedCart()
+        handleSaveAbandonedCart(false) // false = manter como pending
       }
     }
 
-    // Salva também quando muda de página/fecha tab
+    // ✅ Salva como PENDING quando muda de aba/fecha tab
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden' && formData.email && formData.email.length >= 5) {
-        handleSaveAbandonedCart()
+        handleSaveAbandonedCart(false) // false = manter como pending
       }
     }
 
@@ -537,7 +538,11 @@ export default function CheckoutPage() {
   }
 
   // 🎯 CARRINHO ABANDONADO: Salva automaticamente quando usuário preenche dados
-  const handleSaveAbandonedCart = async () => {
+  // markAsAbandoned = true apenas quando cliente SAIR da página (beforeunload/visibilitychange)
+  const handleSaveAbandonedCart = async (markAsAbandoned: boolean | React.FocusEvent = false) => {
+    // Se for um evento (onBlur), ignora o parâmetro e usa false
+    const shouldMarkAbandoned = typeof markAsAbandoned === 'boolean' ? markAsAbandoned : false
+    
     // ✅ Salva com QUALQUER dado preenchido (mesmo parcial)
     const hasAnyData = formData.name || formData.email || formData.phone || formData.cpf
     
@@ -550,7 +555,7 @@ export default function CheckoutPage() {
     const sessionId = sessionStorage.getItem('session_id') || `session_${Date.now()}`
     const emailToSave = formData.email || `carrinho_${sessionId}@temp.local`
 
-    console.log('💾 Salvando carrinho abandonado...', {
+    console.log(shouldMarkAbandoned ? '🚨 Marcando como ABANDONADO...' : '💾 Salvando carrinho (pending)...', {
       name: formData.name,
       email: emailToSave,
       phone: formData.phone,
@@ -573,6 +578,7 @@ export default function CheckoutPage() {
       order_bumps: selectedBumpProducts,
       discount_code: appliedCupom || undefined,
       cart_value: total,
+      markAsAbandoned: shouldMarkAbandoned, // ✅ Só marca abandoned quando cliente sai
     })
   }
 

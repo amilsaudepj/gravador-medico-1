@@ -33,7 +33,7 @@ interface AbandonedCart {
 export default function AbandonedCartsPage() {
   const [carts, setCarts] = useState<AbandonedCart[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'abandoned' | 'recovered'>('all')
+  const [filter, setFilter] = useState<'all' | 'abandoned'>('abandoned') // ✅ Padrão: apenas abandonados
   const [dateFilter, setDateFilter] = useState<'all' | '7' | '15' | '30' | '60' | '90' | 'custom'>('all')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
@@ -51,6 +51,7 @@ export default function AbandonedCartsPage() {
       let query = supabase
         .from('abandoned_carts')
         .select('*')
+        .neq('status', 'pending') // ✅ Excluir carrinhos ainda sendo preenchidos
         .order('created_at', { ascending: false })
 
       if (dateFilter !== 'all') {
@@ -234,16 +235,7 @@ export default function AbandonedCartsPage() {
           >
             Abandonados ({stats.abandoned})
           </button>
-          <button
-            onClick={() => setFilter('recovered')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              filter === 'recovered'
-                ? 'bg-green-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Recuperados ({stats.recovered})
-          </button>
+          {/* Removido botão "Recuperados" - quem compra é deletado da lista */}
         </div>
 
         <div className="flex flex-wrap gap-2">

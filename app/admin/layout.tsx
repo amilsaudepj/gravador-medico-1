@@ -188,7 +188,7 @@ const menuItems = [
   { 
     icon: LayoutDashboard, 
     label: 'Visão Geral', 
-    href: '/admin/overview',
+    href: '/admin/dashboard',
     badge: null
   },
   

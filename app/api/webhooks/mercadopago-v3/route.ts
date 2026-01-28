@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { MercadoPagoWebhookSchema } from '@/lib/validators/checkout';
 import { createAndSaveRedirectUrl } from '@/lib/redirect-helper';
+import { sendWelcomeEmail as sendEmailWithTemplate } from '@/lib/email';
 
 // =====================================================
 // 📊 CONSTANTES E MAPEAMENTOS
@@ -79,40 +80,7 @@ function validateWebhookSignature(
 // =====================================================
 // 📧 ENVIO DE EMAIL (Resend/SMTP)
 // =====================================================
-async function sendWelcomeEmail(
-  email: string,
-  credentials: { email: string; password: string }
-): Promise<boolean> {
-  try {
-    // Implementação com Resend (ou seu provedor de email)
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
-        from: 'Gravador Médico <noreply@seudominio.com>',
-        to: email,
-        subject: '🎉 Bem-vindo ao Gravador Médico!',
-        html: `
-          <h2>Seu acesso está pronto!</h2>
-          <p>Obrigado pela compra. Aqui estão seus dados de acesso:</p>
-          <ul>
-            <li><strong>Email:</strong> ${credentials.email}</li>
-            <li><strong>Senha:</strong> ${credentials.password}</li>
-          </ul>
-          <p><a href="${process.env.LOVABLE_APP_URL}/login">Clique aqui para acessar</a></p>
-        `,
-      }),
-    });
-    
-    return response.ok;
-  } catch (error) {
-    console.error('Email send error:', error);
-    return false;
-  }
-}
+// NOTA: Removido - agora usa sendEmailWithTemplate de @/lib/email
 
 // =====================================================
 // 🚀 PROVISIONAMENTO LOVABLE
@@ -508,18 +476,35 @@ export async function POST(request: NextRequest) {
     }
     
     if (provisionResult.success && provisionResult.credentials) {
-      // Enviar email com credenciais
-      const emailSent = await sendWelcomeEmail(
-        customerEmail,
-        provisionResult.credentials
-      );
+      // Enviar email com credenciais usando o template profissional
+      console.log(`[${saleId || paymentId}] 📧 Enviando e-mail de boas-vindas...`);
+      
+      const emailResult = await sendEmailWithTemplate({
+        to: customerEmail,
+        customerName: customerName || 'Cliente',
+        userEmail: provisionResult.credentials.email,
+        userPassword: provisionResult.credentials.password,
+        orderId: saleId || paymentId,
+        orderValue: totalAmount,
+        paymentMethod: paymentMethod || 'credit_card'
+      });
       
       await supabaseAdmin.from('integration_logs').insert({
         order_id: saleId || paymentId,
         action: 'email_sent',
-        status: emailSent ? 'success' : 'error',
-        details: { email_sent: emailSent },
+        status: emailResult.success ? 'success' : 'error',
+        details: { 
+          email_sent: emailResult.success,
+          email_id: emailResult.emailId,
+          error: emailResult.error
+        },
       });
+      
+      if (emailResult.success) {
+        console.log(`[${saleId || paymentId}] ✅ E-mail enviado com sucesso`);
+      } else {
+        console.error(`[${saleId || paymentId}] ❌ Falha ao enviar e-mail: ${emailResult.error}`);
+      }
       
       console.log(`[${saleId || paymentId}] ✅ Provisionamento completo`);
     } else if (provisionResult.error) {

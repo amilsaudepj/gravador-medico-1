@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdsInsights, DatePreset } from '@/lib/meta-marketing';
+import { getAdsInsights, DatePreset, InsightLevel } from '@/lib/meta-marketing';
 
 const AD_ACCOUNT_ID = process.env.FACEBOOK_AD_ACCOUNT_ID;
 const ACCESS_TOKEN = process.env.FACEBOOK_ACCESS_TOKEN;
@@ -46,10 +46,17 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const datePreset = (searchParams.get('period') || 'maximum') as DatePreset;
+    const level = (searchParams.get('level') || 'campaign') as InsightLevel;
     
-    // Buscar insights e metadata em paralelo
+    // Se for adset ou ad, retorna direto sem enriquecimento (não tem metadata)
+    if (level === 'adset' || level === 'ad') {
+      const insights = await getAdsInsights(datePreset, level);
+      return NextResponse.json(insights);
+    }
+    
+    // Para campanhas, buscar insights e metadata em paralelo
     const [insights, metadata] = await Promise.all([
-      getAdsInsights(datePreset),
+      getAdsInsights(datePreset, 'campaign'),
       getCampaignsMetadata()
     ]);
     

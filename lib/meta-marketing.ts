@@ -9,8 +9,12 @@ const AD_ACCOUNT_ID = process.env.FACEBOOK_AD_ACCOUNT_ID;
 const ACCESS_TOKEN = process.env.FACEBOOK_ACCESS_TOKEN;
 
 export interface CampaignInsight {
-  campaign_name: string;
+  campaign_name?: string;
   campaign_id?: string;
+  adset_name?: string;
+  adset_id?: string;
+  ad_name?: string;
+  ad_id?: string;
   spend: string;
   impressions: string;
   clicks: string;
@@ -28,6 +32,9 @@ export interface CampaignInsight {
     action_type: string;
     value: string;
   }>;
+  // Campos enriquecidos pela API
+  effective_status?: string;
+  created_time?: string;
 }
 
 export interface AdsMetrics {
@@ -49,10 +56,25 @@ export interface AdsMetrics {
 // Períodos disponíveis para consulta (compatíveis com Facebook Ads API)
 export type DatePreset = 'today' | 'yesterday' | 'last_7d' | 'last_14d' | 'last_30d' | 'this_month' | 'last_month' | 'maximum';
 
+// Níveis de detalhamento
+export type InsightLevel = 'campaign' | 'adset' | 'ad';
+
+// Campos por nível
+const FIELDS_BY_LEVEL: Record<InsightLevel, string> = {
+  campaign: 'campaign_name,campaign_id,spend,impressions,clicks,cpc,ctr,actions,action_values,reach,date_start,date_stop,outbound_clicks',
+  adset: 'adset_name,adset_id,campaign_name,campaign_id,spend,impressions,clicks,cpc,ctr,actions,action_values,reach,date_start,date_stop',
+  ad: 'ad_name,ad_id,adset_name,adset_id,campaign_name,spend,impressions,clicks,cpc,ctr,actions,action_values,reach,date_start,date_stop'
+};
+
 /**
- * Busca insights das campanhas
+ * Busca insights das campanhas/conjuntos/anúncios
+ * @param datePreset - Período de tempo
+ * @param level - Nível de detalhamento (campaign, adset, ad)
  */
-export async function getAdsInsights(datePreset: DatePreset = 'maximum'): Promise<CampaignInsight[]> {
+export async function getAdsInsights(
+  datePreset: DatePreset = 'maximum',
+  level: InsightLevel = 'campaign'
+): Promise<CampaignInsight[]> {
   if (!AD_ACCOUNT_ID || !ACCESS_TOKEN) {
     console.error('❌ FACEBOOK_AD_ACCOUNT_ID ou FACEBOOK_ACCESS_TOKEN não configurados');
     return [];
@@ -60,10 +82,10 @@ export async function getAdsInsights(datePreset: DatePreset = 'maximum'): Promis
 
   const url = `https://graph.facebook.com/v19.0/act_${AD_ACCOUNT_ID}/insights?` + new URLSearchParams({
     access_token: ACCESS_TOKEN,
-    level: 'campaign',
+    level: level,
     date_preset: datePreset,
-    fields: 'campaign_name,campaign_id,spend,impressions,clicks,cpc,ctr,actions,action_values,reach,date_start,date_stop,outbound_clicks',
-    limit: '50'
+    fields: FIELDS_BY_LEVEL[level],
+    limit: '100'
   });
 
   try {
@@ -75,7 +97,13 @@ export async function getAdsInsights(datePreset: DatePreset = 'maximum'): Promis
       return [];
     }
     
-    return data.data || [];
+    // Ordenar por spend decrescente
+    const insights = data.data || [];
+    insights.sort((a: CampaignInsight, b: CampaignInsight) => 
+      Number(b.spend || 0) - Number(a.spend || 0)
+    );
+    
+    return insights;
   } catch (error) {
     console.error('💥 Erro ao buscar Ads Insights:', error);
     return [];
