@@ -11,7 +11,55 @@ import { createAppmaxOrder } from '@/lib/appmax'
  * - ✅ Payment Attempts tipados (histórico granular)
  * - ✅ Cascata inteligente MP → AppMax
  * - ✅ PCI Compliant (tokens, não dados brutos)
+ * - ✅ Logging detalhado para debug (checkout_logs)
  */
+
+// =====================================================
+// FUNÇÃO DE LOGGING PARA DEBUG
+// =====================================================
+
+async function logCheckoutAttempt({
+  session_id,
+  order_id,
+  gateway,
+  status,
+  payload_sent,
+  response_data = null,
+  error_response = null,
+  error_message = null,
+  error_cause = null,
+  http_status = null
+}: {
+  session_id?: string
+  order_id?: string
+  gateway: string
+  status: 'SUCCESS' | 'ERROR' | 'FALLBACK'
+  payload_sent: any
+  response_data?: any
+  error_response?: any
+  error_message?: string | null
+  error_cause?: string | null
+  http_status?: number | null
+}) {
+  try {
+    await supabaseAdmin.from('checkout_logs').insert({
+      session_id,
+      order_id,
+      gateway,
+      status,
+      payload_sent,
+      response_data,
+      error_response,
+      error_message,
+      error_cause,
+      http_status
+    })
+    console.log(`📝 Log registrado: ${gateway} - ${status}`)
+  } catch (logError) {
+    // Não deixar o log quebrar o fluxo
+    console.error('⚠️ Erro ao gravar log (não crítico):', logError)
+  }
+}
 
 // =====================================================
 // CONFIGURAÇÃO DE ERRO
@@ -143,41 +191,41 @@ export async function POST(request: NextRequest) {
     console.log(`   mpToken value: ${mpToken ? mpToken.substring(0, 20) + '...' : 'NULL'}`)
 
     if (payment_method === 'credit_card' && mpToken) {
-      try {
-        console.log('💳 [1/2] Tentando Mercado Pago...')
-        console.log('🔐 Token MP recebido:', mpToken?.substring(0, 20) + '...')
-        
-        const mpStartTime = Date.now()
-        
-        // Montar payload
-        const mpPayload = {
-          token: mpToken,
-          transaction_amount: amount,
-          description: 'Gravador Médico - Acesso Vitalício',
-          payment_method_id: 'credit_card',
-          installments: 1,
+      const mpStartTime = Date.now()
+      
+      // Montar payload FORA do try para poder logar em caso de erro
+      const mpPayload = {
+        token: mpToken,
+        transaction_amount: amount,
+        description: 'Gravador Médico - Acesso Vitalício',
+        payment_method_id: 'credit_card',
+        installments: 1,
+        payer: {
+          email: customer.email,
+          first_name: customer.name?.split(' ')[0] || '',
+          last_name: customer.name?.split(' ').slice(1).join(' ') || '',
+          identification: {
+            type: customer.documentType || 'CPF', // CPF ou CNPJ
+            number: customer.cpf.replace(/\D/g, '')
+          }
+        },
+        external_reference: order.id, // ✅ ADICIONADO: Referência para cruzar dados
+        notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
+        statement_descriptor: 'GRAVADOR MEDICO',
+        additional_info: {
           payer: {
-            email: customer.email,
             first_name: customer.name?.split(' ')[0] || '',
             last_name: customer.name?.split(' ').slice(1).join(' ') || '',
-            identification: {
-              type: customer.documentType || 'CPF', // CPF ou CNPJ
-              number: customer.cpf.replace(/\D/g, '')
-            }
-          },
-          external_reference: order.id, // ✅ ADICIONADO: Referência para cruzar dados
-          notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
-          statement_descriptor: 'GRAVADOR MEDICO',
-          additional_info: {
-            payer: {
-              first_name: customer.name?.split(' ')[0] || '',
-              last_name: customer.name?.split(' ').slice(1).join(' ') || '',
-              phone: {
-                number: customer.phone?.replace(/\D/g, '') || ''
-              }
+            phone: {
+              number: customer.phone?.replace(/\D/g, '') || ''
             }
           }
         }
+      }
+      
+      try {
+        console.log('💳 [1/2] Tentando Mercado Pago...')
+        console.log('🔐 Token MP recebido:', mpToken?.substring(0, 20) + '...')
 
         // 🔥 LOG DETALHADO DO PAYLOAD
         console.log('📦 PAYLOAD ENVIADO PARA MERCADO PAGO:', JSON.stringify({
@@ -226,6 +274,22 @@ export async function POST(request: NextRequest) {
           console.error('❌ MERCADO PAGO RETORNOU ERRO OU RECUSA:')
           console.error('HTTP Status:', mpResponse.status)
           console.error('Response completa:', JSON.stringify(mpResult, null, 2))
+          
+          // 📝 Registrar erro detalhado no banco
+          await logCheckoutAttempt({
+            order_id: order.id,
+            gateway: 'mercadopago',
+            status: 'ERROR',
+            payload_sent: {
+              ...mpPayload,
+              token: mpPayload.token ? `${mpPayload.token.substring(0, 10)}...` : null // Ocultar token completo
+            },
+            response_data: mpResult,
+            error_response: mpResult,
+            error_message: mpResult.message || mpResult.status_detail || 'Pagamento recusado',
+            error_cause: mpResult.cause ? JSON.stringify(mpResult.cause) : null,
+            http_status: mpResponse.status
+          })
         }
 
         // Registrar tentativa em payment_attempts
@@ -243,6 +307,24 @@ export async function POST(request: NextRequest) {
         // ✅ MERCADO PAGO APROVOU
         if (mpResult.status === 'approved') {
           console.log('✅ [SUCCESS] Mercado Pago aprovou!')
+
+          // 📝 Registrar sucesso no banco
+          await logCheckoutAttempt({
+            order_id: order.id,
+            gateway: 'mercadopago',
+            status: 'SUCCESS',
+            payload_sent: {
+              ...mpPayload,
+              token: mpPayload.token ? `${mpPayload.token.substring(0, 10)}...` : null
+            },
+            response_data: {
+              id: mpResult.id,
+              status: mpResult.status,
+              status_detail: mpResult.status_detail,
+              payment_method_id: mpResult.payment_method_id
+            },
+            http_status: mpResponse.status
+          })
 
           // Atualizar pedido: processing → paid
           await supabaseAdmin
@@ -314,6 +396,24 @@ export async function POST(request: NextRequest) {
           console.error('Mensagem:', fetchError.message)
           console.error('Stack:', fetchError.stack)
           
+          // 📝 Registrar erro de rede no banco
+          await logCheckoutAttempt({
+            order_id: order.id,
+            gateway: 'mercadopago',
+            status: 'ERROR',
+            payload_sent: {
+              ...mpPayload,
+              token: mpPayload.token ? `${mpPayload.token.substring(0, 10)}...` : null
+            },
+            error_response: {
+              error_name: fetchError.name,
+              error_message: fetchError.message,
+              error_stack: fetchError.stack
+            },
+            error_message: fetchError.message,
+            error_cause: fetchError.name
+          })
+          
           // Tratar timeout especificamente
           if (fetchError.name === 'AbortError') {
             console.error('⏱️ TIMEOUT: Mercado Pago não respondeu em 30s')
@@ -336,6 +436,25 @@ export async function POST(request: NextRequest) {
           console.error('HTTP Status:', mpError.response.status)
           console.error('HTTP Data:', mpError.response.data)
         }
+        
+        // 📝 Registrar erro crítico no banco
+        await logCheckoutAttempt({
+          order_id: order.id,
+          gateway: 'mercadopago',
+          status: 'ERROR',
+          payload_sent: mpPayload ? {
+            ...mpPayload,
+            token: mpPayload.token ? `${mpPayload.token.substring(0, 10)}...` : null
+          } : { error: 'payload não disponível' },
+          error_response: mpError.response?.data || {
+            error_type: mpError.constructor.name,
+            error_message: mpError.message,
+            error_stack: mpError.stack
+          },
+          error_message: mpError.message,
+          error_cause: mpError.constructor.name,
+          http_status: mpError.response?.status
+        })
         
         // Registrar erro
         await supabaseAdmin.from('payment_attempts').insert({
@@ -442,6 +561,28 @@ export async function POST(request: NextRequest) {
     console.log(`   appmax_data:`, appmax_data ? JSON.stringify(appmax_data, null, 2) : 'NULL')
 
     if (appmax_data) {
+      const appmaxStartTime = Date.now()
+      
+      // Preparar payload para log
+      const appmaxPayload = {
+        customer: {
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          cpf: customer.cpf,
+        },
+        product_id: process.env.APPMAX_PRODUCT_ID || '32991339',
+        quantity: 1,
+        payment_method: appmax_data.payment_method === 'credit_card' ? 'credit_card' : 'pix',
+        card_data: appmax_data.card_data ? {
+          ...appmax_data.card_data,
+          number: appmax_data.card_data.number ? `****${appmax_data.card_data.number.slice(-4)}` : null,
+          cvv: '***' // Ocultar CVV no log
+        } : null,
+        order_bumps: appmax_data.order_bumps || [],
+        discount: body.discount || 0,
+      }
+      
       try {
         console.log('💳 [2/2] Tentando AppMax (fallback)...')
         console.log('🔄 FALLBACK ACIONADO - Mercado Pago falhou ou recusou')
@@ -450,8 +591,6 @@ export async function POST(request: NextRequest) {
           payment_method: appmax_data.payment_method,
           order_bumps_count: appmax_data.order_bumps?.length || 0
         })
-        
-        const appmaxStartTime = Date.now()
 
         // Usar a função correta do lib/appmax.ts
         const appmaxResult = await createAppmaxOrder({
@@ -473,6 +612,17 @@ export async function POST(request: NextRequest) {
 
         console.log(`📊 AppMax response: success=${appmaxResult.success} (${appmaxResponseTime}ms)`)
         console.log('📊 AppMax result:', JSON.stringify(appmaxResult, null, 2))
+
+        // 📝 Registrar no checkout_logs
+        await logCheckoutAttempt({
+          order_id: order.id,
+          gateway: 'appmax',
+          status: appmaxResult.success ? 'SUCCESS' : 'ERROR',
+          payload_sent: appmaxPayload,
+          response_data: appmaxResult.success ? appmaxResult : null,
+          error_response: !appmaxResult.success ? appmaxResult : null,
+          error_message: !appmaxResult.success ? appmaxResult.message : null
+        })
 
         // Registrar tentativa
         await supabaseAdmin.from('payment_attempts').insert({
@@ -529,6 +679,21 @@ export async function POST(request: NextRequest) {
 
       } catch (appmaxError: any) {
         console.error('❌ Erro crítico no AppMax:', appmaxError.message)
+        
+        // 📝 Registrar erro do AppMax
+        await logCheckoutAttempt({
+          order_id: order.id,
+          gateway: 'appmax',
+          status: 'ERROR',
+          payload_sent: appmaxPayload,
+          error_response: {
+            error_type: appmaxError.constructor.name,
+            error_message: appmaxError.message,
+            error_stack: appmaxError.stack
+          },
+          error_message: appmaxError.message,
+          error_cause: appmaxError.constructor.name
+        })
         
         await supabaseAdmin.from('payment_attempts').insert({
           sale_id: order.id,
