@@ -9,9 +9,62 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   DollarSign, MousePointerClick, Eye, Users, TrendingUp, AlertCircle, 
   RefreshCw, Megaphone, Target, BarChart3, Zap, Filter, ArrowUpDown,
-  PlayCircle, ExternalLink, ShoppingCart, Facebook, Layers, Image
+  PlayCircle, ExternalLink, ShoppingCart, Facebook, Layers, Image, Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Interface para dados de vendas do Supabase
+interface SalesData {
+  totalSales: number;
+  totalValue: number;
+  approvedSales: number;
+  approvedValue: number;
+}
+
+// Função para calcular datas baseado no período do Facebook
+function getDateRangeFromPeriod(period: string): { start: Date; end: Date } {
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  
+  let start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+
+  switch (period) {
+    case 'today':
+      // start já está em hoje às 00:00
+      break;
+    case 'yesterday':
+      start.setDate(start.getDate() - 1);
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
+      break;
+    case 'last_7d':
+      start.setDate(start.getDate() - 6); // Inclui hoje = 7 dias
+      break;
+    case 'last_14d':
+      start.setDate(start.getDate() - 13);
+      break;
+    case 'last_30d':
+      start.setDate(start.getDate() - 29);
+      break;
+    case 'this_month':
+      start.setDate(1);
+      break;
+    case 'last_month':
+      start.setMonth(start.getMonth() - 1);
+      start.setDate(1);
+      end.setDate(0); // Último dia do mês anterior
+      break;
+    case 'maximum':
+      start = new Date('2020-01-01');
+      break;
+    default:
+      start.setDate(start.getDate() - 6);
+  }
+
+  return { start, end };
+}
 
 // Tipo para níveis de análise
 type InsightLevel = 'campaign' | 'adset' | 'ad';
@@ -175,6 +228,14 @@ export default function AdsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [selectedPeriod, setSelectedPeriod] = useState('last_7d');
+  
+  // Estado para vendas reais do Supabase
+  const [realSales, setRealSales] = useState<SalesData | null>(null);
+  
+  // Estados para gastos do dia e do mês
+  const [spendToday, setSpendToday] = useState<number>(0);
+  const [spendMonth, setSpendMonth] = useState<number>(0);
+  
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('date_desc');
   const [activeTab, setActiveTab] = useState<InsightLevel>('campaign');
@@ -186,11 +247,74 @@ export default function AdsPage() {
     return Array.isArray(data) ? data : [];
   }, []);
 
+  // Buscar vendas reais do Supabase para o período
+  const fetchRealSales = useCallback(async (period: string) => {
+    try {
+      const { start, end } = getDateRangeFromPeriod(period);
+      const params = new URLSearchParams({
+        start: start.toISOString(),
+        end: end.toISOString(),
+        limit: '1000'
+      });
+      
+      const res = await fetch(`/api/admin/sales?${params.toString()}`, {
+        credentials: 'include'
+      });
+      
+      if (!res.ok) {
+        console.error('Erro ao buscar vendas reais');
+        return;
+      }
+      
+      const data = await res.json();
+      const sales = Array.isArray(data) ? data : (data.sales || []);
+      
+      // Filtrar apenas vendas (não tentativas falhas)
+      const actualSales = sales.filter((s: any) => s.source === 'sale' || !s.source);
+      
+      // Calcular totais
+      const approvedStatuses = ['paid', 'approved', 'captured', 'completed'];
+      const approved = actualSales.filter((s: any) => 
+        approvedStatuses.includes((s.status || '').toLowerCase())
+      );
+      
+      setRealSales({
+        totalSales: actualSales.length,
+        totalValue: actualSales.reduce((sum: number, s: any) => sum + Number(s.total_amount || 0), 0),
+        approvedSales: approved.length,
+        approvedValue: approved.reduce((sum: number, s: any) => sum + Number(s.total_amount || 0), 0)
+      });
+    } catch (error) {
+      console.error('Erro ao buscar vendas reais:', error);
+    }
+  }, []);
+
+  // Buscar gastos de hoje e do mês (sempre, independente do período selecionado)
+  const fetchSpendSummary = useCallback(async () => {
+    try {
+      // Buscar gasto de hoje
+      const todayData = await fetchLevelData('campaign', 'today');
+      const todaySpend = todayData.reduce((sum: number, c: CampaignInsight) => sum + Number(c.spend || 0), 0);
+      setSpendToday(todaySpend);
+      
+      // Buscar gasto do mês
+      const monthData = await fetchLevelData('campaign', 'this_month');
+      const monthSpend = monthData.reduce((sum: number, c: CampaignInsight) => sum + Number(c.spend || 0), 0);
+      setSpendMonth(monthSpend);
+    } catch (error) {
+      console.error('Erro ao buscar resumo de gastos:', error);
+    }
+  }, [fetchLevelData]);
+
   const fetchData = useCallback(async (showRefresh = false, period = selectedPeriod) => {
     if (showRefresh) setRefreshing(true);
     try {
-      // Sempre carrega campanhas primeiro
-      const campaigns = await fetchLevelData('campaign', period);
+      // Buscar campanhas do Facebook, vendas reais e resumo de gastos em paralelo
+      const [campaigns] = await Promise.all([
+        fetchLevelData('campaign', period),
+        fetchRealSales(period),
+        fetchSpendSummary()
+      ]);
       
       const calculatedMetrics = calculateAdsMetrics(campaigns);
       setMetrics(calculatedMetrics);
@@ -216,7 +340,7 @@ export default function AdsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedPeriod, fetchLevelData]);
+  }, [selectedPeriod, fetchLevelData, fetchRealSales]);
 
   // Carregar adsets quando tab mudar
   const fetchAdsets = useCallback(async () => {
@@ -467,19 +591,50 @@ export default function AdsPage() {
       color: 'text-red-400'
     },
     { 
-      title: 'Compras', 
+      title: 'Compras (Pixel)', 
       value: metrics?.totalPurchases || 0, 
       icon: ShoppingCart, 
-      color: 'text-emerald-400'
+      color: 'text-emerald-400',
+      description: 'Dados do Facebook Pixel'
     },
     { 
-      title: 'Valor em Vendas', 
+      title: 'Valor Pixel', 
       value: metrics?.totalPurchaseValue || 0, 
       icon: DollarSign, 
       color: 'text-yellow-400',
-      isCurrency: true
+      isCurrency: true,
+      description: 'Dados do Facebook Pixel'
     },
   ];
+
+  // Cards de vendas reais (Supabase)
+  const realSalesCards = [
+    { 
+      title: 'Vendas Reais', 
+      value: realSales?.approvedSales || 0, 
+      icon: ShoppingCart, 
+      color: 'text-emerald-400',
+      description: 'Vendas aprovadas no período'
+    },
+    { 
+      title: 'Receita Real', 
+      value: realSales?.approvedValue || 0, 
+      icon: DollarSign, 
+      color: 'text-green-400',
+      isCurrency: true,
+      description: 'Valor das vendas aprovadas'
+    },
+  ];
+
+  // ROAS Real calculado com vendas reais
+  const realRoas = metrics?.totalSpend && realSales?.approvedValue 
+    ? (realSales.approvedValue / metrics.totalSpend) 
+    : 0;
+
+  // CPA Real
+  const realCpa = realSales?.approvedSales && metrics?.totalSpend 
+    ? (metrics.totalSpend / realSales.approvedSales) 
+    : 0;
 
   return (
     <div className="p-6">
@@ -563,6 +718,81 @@ export default function AdsPage() {
           </button>
         </div>
       </motion.div>
+
+      {/* Big Numbers - Gastos do Dia e Mês */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="col-span-1 bg-gradient-to-br from-orange-500/20 to-red-600/20 backdrop-blur-xl rounded-2xl border border-orange-500/30 p-6"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-orange-300">Gasto Hoje</span>
+            <div className="p-2 rounded-xl bg-orange-500/20">
+              <DollarSign className="h-4 w-4 text-orange-400" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-white">
+            {loading ? <Skeleton className="h-8 w-28 bg-white/10" /> : formatCurrency(spendToday)}
+          </div>
+          <p className="text-xs text-orange-300/60 mt-1">Investimento do dia atual</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="col-span-1 bg-gradient-to-br from-purple-500/20 to-pink-600/20 backdrop-blur-xl rounded-2xl border border-purple-500/30 p-6"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-purple-300">Gasto do Mês</span>
+            <div className="p-2 rounded-xl bg-purple-500/20">
+              <TrendingUp className="h-4 w-4 text-purple-400" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-white">
+            {loading ? <Skeleton className="h-8 w-28 bg-white/10" /> : formatCurrency(spendMonth)}
+          </div>
+          <p className="text-xs text-purple-300/60 mt-1">Investimento em {new Date().toLocaleDateString('pt-BR', { month: 'long' })}</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="col-span-1 bg-gradient-to-br from-emerald-500/20 to-green-600/20 backdrop-blur-xl rounded-2xl border border-emerald-500/30 p-6"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-emerald-300">Compras (Pixel)</span>
+            <div className="p-2 rounded-xl bg-emerald-500/20">
+              <ShoppingCart className="h-4 w-4 text-emerald-400" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-white">
+            {loading ? <Skeleton className="h-8 w-16 bg-white/10" /> : metrics?.totalPurchases || 0}
+          </div>
+          <p className="text-xs text-emerald-300/60 mt-1">No período selecionado</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="col-span-1 bg-gradient-to-br from-yellow-500/20 to-amber-600/20 backdrop-blur-xl rounded-2xl border border-yellow-500/30 p-6"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-yellow-300">Receita (Pixel)</span>
+            <div className="p-2 rounded-xl bg-yellow-500/20">
+              <DollarSign className="h-4 w-4 text-yellow-400" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-white">
+            {loading ? <Skeleton className="h-8 w-28 bg-white/10" /> : formatCurrency(metrics?.totalPurchaseValue || 0)}
+          </div>
+          <p className="text-xs text-yellow-300/60 mt-1">No período selecionado</p>
+        </motion.div>
+      </div>
 
       {/* KPIs Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -729,23 +959,49 @@ export default function AdsPage() {
                   statusFilter={statusFilter}
                 />
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
+                <div className="overflow-auto max-h-[500px] scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                  <table className="w-full min-w-[1200px]">
+                    <thead className="sticky top-0 bg-gray-900/95 backdrop-blur-sm z-10">
                       <tr className="border-b border-white/10">
                         <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Campanha</th>
                         <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Status</th>
                         <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">Gasto</th>
+                        <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">Alcance</th>
                         <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">Cliques</th>
+                        <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">Cliq. Saída</th>
                         <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">CPC</th>
                         <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">CTR</th>
                         <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">Impressões</th>
+                        <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">Compras</th>
+                        <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">Receita</th>
+                        <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">Custo/Compra</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredAndSortedCampaigns.map((campaign, index) => {
                         const status = (campaign as any).effective_status || 'UNKNOWN';
                         const ctr = Number(campaign.ctr || 0);
+                        
+                        // Extrair compras das actions
+                        const purchases = campaign.actions?.find(a => 
+                          a.action_type === 'purchase' || 
+                          a.action_type === 'omni_purchase' ||
+                          a.action_type === 'offsite_conversion.fb_pixel_purchase'
+                        );
+                        const purchaseCount = Number(purchases?.value || 0);
+                        
+                        // Extrair valor das compras
+                        const purchaseValue = campaign.action_values?.find(a => 
+                          a.action_type === 'purchase' || 
+                          a.action_type === 'omni_purchase' ||
+                          a.action_type === 'offsite_conversion.fb_pixel_purchase'
+                        );
+                        const purchaseAmount = Number(purchaseValue?.value || 0);
+                        
+                        // Cliques de saída (outbound clicks)
+                        const outboundClicks = campaign.outbound_clicks?.reduce(
+                          (sum, oc) => sum + Number(oc.value || 0), 0
+                        ) || 0;
                         
                         return (
                           <motion.tr 
@@ -764,8 +1020,14 @@ export default function AdsPage() {
                             <td className="py-4 px-4 text-right font-medium text-green-400">
                               {formatCurrency(Number(campaign.spend || 0))}
                             </td>
+                            <td className="py-4 px-4 text-right text-indigo-400">
+                              {formatNumber(Number(campaign.reach || 0))}
+                            </td>
                             <td className="py-4 px-4 text-right text-white">
                               {formatNumber(Number(campaign.clicks || 0))}
+                            </td>
+                            <td className="py-4 px-4 text-right text-cyan-400">
+                              {formatNumber(outboundClicks)}
                             </td>
                             <td className="py-4 px-4 text-right text-orange-400">
                               {formatCurrency(Number(campaign.cpc || 0))}
@@ -778,6 +1040,29 @@ export default function AdsPage() {
                             </td>
                             <td className="py-4 px-4 text-right text-gray-400">
                               {formatNumber(Number(campaign.impressions || 0))}
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              {purchaseCount > 0 ? (
+                                <span className="font-semibold text-emerald-400">{purchaseCount}</span>
+                              ) : (
+                                <span className="text-gray-500">0</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              {purchaseAmount > 0 ? (
+                                <span className="font-semibold text-yellow-400">{formatCurrency(purchaseAmount)}</span>
+                              ) : (
+                                <span className="text-gray-500">R$ 0,00</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              {purchaseCount > 0 ? (
+                                <span className="font-semibold text-pink-400">
+                                  {formatCurrency(Number(campaign.spend || 0) / purchaseCount)}
+                                </span>
+                              ) : (
+                                <span className="text-gray-500">-</span>
+                              )}
                             </td>
                           </motion.tr>
                         );

@@ -11,6 +11,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { MercadoPagoWebhookSchema } from '@/lib/validators/checkout';
 import { createAndSaveRedirectUrl } from '@/lib/redirect-helper';
 import { sendWelcomeEmail as sendEmailWithTemplate } from '@/lib/email';
+import { sendPurchaseEvent } from '@/lib/meta-capi';
 
 // =====================================================
 // 📊 CONSTANTES E MAPEAMENTOS
@@ -512,7 +513,39 @@ export async function POST(request: NextRequest) {
     }
     
     // ==================================================
-    // 1️⃣2️⃣ CRIAR URL DE REDIRECIONAMENTO
+    // 1️⃣2️⃣ ENVIAR EVENTO PURCHASE PARA META CAPI 🎯
+    // ==================================================
+    // Buscar cookies de tracking do order (se disponível)
+    const fbCookies = order?.metadata?.fb_cookies || {};
+    
+    try {
+      console.log(`[${saleId || paymentId}] 📊 Enviando evento Purchase para Meta CAPI...`);
+      
+      const capiResult = await sendPurchaseEvent({
+        orderId: saleId || paymentId,
+        customerEmail: customerEmail || undefined,
+        customerPhone: customerPhone || undefined,
+        customerName: customerName || undefined,
+        totalAmount: totalAmount, // Inclui produto + order bump
+        currency: 'BRL',
+        productName: 'Gravador Médico',
+        productIds: ['gravador-medico'],
+        fbc: fbCookies.fbc || order?.fbc || undefined,
+        fbp: fbCookies.fbp || order?.fbp || undefined,
+        eventSourceUrl: 'https://gravadormedico.com.br/obrigado'
+      });
+      
+      if (capiResult.success) {
+        console.log(`[${saleId || paymentId}] ✅ Meta CAPI: Evento enviado com sucesso (value: R$ ${totalAmount})`);
+      } else {
+        console.error(`[${saleId || paymentId}] ❌ Meta CAPI: Falha ao enviar evento:`, capiResult.error);
+      }
+    } catch (capiError) {
+      console.error(`[${saleId || paymentId}] ❌ Meta CAPI: Erro inesperado:`, capiError);
+    }
+    
+    // ==================================================
+    // 1️⃣3️⃣ CRIAR URL DE REDIRECIONAMENTO
     // ==================================================
     const redirectUrl = await createAndSaveRedirectUrl({
       orderId: saleId || paymentId,

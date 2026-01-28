@@ -67,6 +67,55 @@ const FIELDS_BY_LEVEL: Record<InsightLevel, string> = {
 };
 
 /**
+ * Converte date_preset para time_range com datas explícitas
+ * Isso garante que o dia atual seja incluído corretamente
+ */
+function getTimeRange(datePreset: DatePreset): { since: string; until: string } | null {
+  const today = new Date();
+  const formatDate = (d: Date) => d.toISOString().split('T')[0];
+  
+  switch (datePreset) {
+    case 'today': {
+      const todayStr = formatDate(today);
+      return { since: todayStr, until: todayStr };
+    }
+    case 'yesterday': {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatDate(yesterday);
+      return { since: yesterdayStr, until: yesterdayStr };
+    }
+    case 'last_7d': {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 6); // 7 dias incluindo hoje
+      return { since: formatDate(start), until: formatDate(today) };
+    }
+    case 'last_14d': {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 13);
+      return { since: formatDate(start), until: formatDate(today) };
+    }
+    case 'last_30d': {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 29);
+      return { since: formatDate(start), until: formatDate(today) };
+    }
+    case 'this_month': {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { since: formatDate(start), until: formatDate(today) };
+    }
+    case 'last_month': {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const end = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { since: formatDate(start), until: formatDate(end) };
+    }
+    case 'maximum':
+    default:
+      return null; // Usa date_preset para maximum
+  }
+}
+
+/**
  * Busca insights das campanhas/conjuntos/anúncios
  * @param datePreset - Período de tempo
  * @param level - Nível de detalhamento (campaign, adset, ad)
@@ -80,16 +129,27 @@ export async function getAdsInsights(
     return [];
   }
 
-  const url = `https://graph.facebook.com/v19.0/act_${AD_ACCOUNT_ID}/insights?` + new URLSearchParams({
+  // Usar time_range para períodos específicos (garante inclusão do dia atual)
+  const timeRange = getTimeRange(datePreset);
+  
+  const params: Record<string, string> = {
     access_token: ACCESS_TOKEN,
     level: level,
-    date_preset: datePreset,
     fields: FIELDS_BY_LEVEL[level],
     limit: '100'
-  });
+  };
+
+  // Se temos time_range, usa ele; senão usa date_preset
+  if (timeRange) {
+    params.time_range = JSON.stringify(timeRange);
+  } else {
+    params.date_preset = datePreset;
+  }
+
+  const url = `https://graph.facebook.com/v19.0/act_${AD_ACCOUNT_ID}/insights?` + new URLSearchParams(params);
 
   try {
-    const res = await fetch(url, { next: { revalidate: 300 } }); // Cache 5min
+    const res = await fetch(url, { next: { revalidate: 60 } }); // Cache 1min para dados mais frescos
     const data = await res.json();
     
     if (data.error) {
