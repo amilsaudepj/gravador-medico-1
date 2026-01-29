@@ -116,6 +116,12 @@ export default function AdminDashboard() {
       const startDateStr = formatDateForAPI(start);
       const endDateStr = formatDateForAPI(end);
       
+      // Debug: Log das datas sendo enviadas para Meta Ads
+      console.log('📅 [loadAnalyticsData] Filtro:', filterType, 'quickDays:', quickDays);
+      console.log('📅 [loadAnalyticsData] Meta Ads range:', { startDateStr, endDateStr });
+      console.log('📅 [loadAnalyticsData] Start Date obj:', start.toISOString());
+      console.log('📅 [loadAnalyticsData] End Date obj:', end.toISOString());
+      
       const metaParams = new URLSearchParams({
         start: startDateStr,
         end: endDateStr
@@ -165,10 +171,14 @@ export default function AdminDashboard() {
         const end = new Date(`${endDate}T23:59:59.999`)
         params.set('start', start.toISOString())
         params.set('end', end.toISOString())
+        console.log('📊 [loadAllData] Modo custom:', { start: start.toISOString(), end: end.toISOString() });
       } else {
         params.set('days', String(quickDays))
+        console.log('📊 [loadAllData] Modo quick:', { days: quickDays, filterType });
       }
 
+      console.log('📊 [loadAllData] URL params:', params.toString());
+      
       const response = await fetch(`/api/admin/dashboard?${params.toString()}`, {
         credentials: 'include'
       })

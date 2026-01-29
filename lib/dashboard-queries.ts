@@ -31,44 +31,74 @@ type RangeOptions = {
   days?: number
 }
 
+// Helper para obter data no timezone de São Paulo (UTC-3)
+function getBrazilDate(date?: Date): Date {
+  const d = date ? new Date(date) : new Date();
+  // Ajusta para UTC-3 (São Paulo) - adiciona 3 horas porque toISOString subtrai o offset
+  const brazilOffset = -3 * 60; // -3 horas em minutos
+  const utcOffset = d.getTimezoneOffset(); // offset do servidor em minutos
+  const diff = brazilOffset - (-utcOffset); // diferença entre Brasil e servidor
+  return new Date(d.getTime() + diff * 60 * 1000);
+}
+
+// Formata data como YYYY-MM-DD para usar em queries SQL com timezone Brasil
+function formatBrazilDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function resolveIsoRange(options?: RangeOptions) {
-  const now = new Date()
+  // Usar timezone de São Paulo para cálculos
+  const nowBrazil = getBrazilDate();
+  const todayBrazil = formatBrazilDate(nowBrazil);
   
-  // Se days === 0 (hoje) ou days === 1 (ontem), tratar de forma especial
+  console.log('🔍 [resolveIsoRange] Input options:', options);
+  console.log('🔍 [resolveIsoRange] Data Brasil (hoje):', todayBrazil);
+  
+  // Se days === 0 (hoje) ou days === 1 (ontem), usar datas no timezone Brasil
   if (options?.days === 0) {
-    // Hoje: do início do dia até agora
-    const todayStart = new Date(now)
-    todayStart.setHours(0, 0, 0, 0)
-    return {
-      startIso: todayStart.toISOString(),
-      endIso: now.toISOString(),
-      durationMs: now.getTime() - todayStart.getTime()
+    // Hoje no Brasil: 00:00:00 até 23:59:59 (em UTC seria +3h)
+    const startIso = `${todayBrazil}T03:00:00.000Z`; // 00:00 Brasil = 03:00 UTC
+    const endIso = `${todayBrazil}T02:59:59.999Z`.replace(todayBrazil, formatBrazilDate(new Date(nowBrazil.getTime() + 24*60*60*1000))); // 23:59 Brasil = 02:59 UTC do dia seguinte
+    
+    // Simplificando: usar o range completo do dia no Brasil
+    const result = {
+      startIso: `${todayBrazil}T03:00:00.000Z`,
+      endIso: new Date().toISOString(), // até agora
+      durationMs: 24 * 60 * 60 * 1000
     }
+    console.log('🔍 [resolveIsoRange] Modo HOJE (Brasil):', result);
+    return result
   }
   
   if (options?.days === 1) {
-    // Ontem: do início de ontem até o fim de ontem
-    const yesterdayStart = new Date(now)
-    yesterdayStart.setDate(yesterdayStart.getDate() - 1)
-    yesterdayStart.setHours(0, 0, 0, 0)
-    const yesterdayEnd = new Date(yesterdayStart)
-    yesterdayEnd.setHours(23, 59, 59, 999)
-    return {
-      startIso: yesterdayStart.toISOString(),
-      endIso: yesterdayEnd.toISOString(),
-      durationMs: yesterdayEnd.getTime() - yesterdayStart.getTime()
+    // Ontem no Brasil
+    const yesterdayBrazil = new Date(nowBrazil);
+    yesterdayBrazil.setDate(yesterdayBrazil.getDate() - 1);
+    const yesterdayStr = formatBrazilDate(yesterdayBrazil);
+    
+    // Ontem 00:00 Brasil = Ontem 03:00 UTC
+    // Ontem 23:59 Brasil = Hoje 02:59 UTC
+    const result = {
+      startIso: `${yesterdayStr}T03:00:00.000Z`,
+      endIso: `${todayBrazil}T02:59:59.999Z`,
+      durationMs: 24 * 60 * 60 * 1000
     }
+    console.log('🔍 [resolveIsoRange] Modo ONTEM (Brasil):', result);
+    return result
   }
   
-  const endDate = options?.end ? new Date(options.end) : now
+  const endDate = options?.end ? new Date(options.end) : new Date()
   const days = options?.days && options.days > 0 ? options.days : 30
   const startDate = options?.start
     ? new Date(options.start)
     : new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000)
 
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-    const fallbackEnd = now
-    const fallbackStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const fallbackEnd = new Date()
+    const fallbackStart = new Date(fallbackEnd.getTime() - 30 * 24 * 60 * 60 * 1000)
     return {
       startIso: fallbackStart.toISOString(),
       endIso: fallbackEnd.toISOString(),
@@ -289,6 +319,9 @@ export async function fetchDashboardMetrics(
     const prevStart = new Date(new Date(startIso).getTime() - durationMs).toISOString()
     const prevEnd = startIso
 
+    console.log('📊 [fetchDashboardMetrics] Buscando período:', { startIso, endIso });
+    console.log('📊 [fetchDashboardMetrics] Período anterior:', { prevStart, prevEnd });
+
     const [currentRes, previousRes] = await Promise.all([
       supabase.rpc('get_analytics_period', {
         start_date: startIso,
@@ -299,6 +332,12 @@ export async function fetchDashboardMetrics(
         end_date: prevEnd
       })
     ])
+
+    console.log('📊 [fetchDashboardMetrics] Resultado RPC:', { 
+      currentData: currentRes.data, 
+      currentError: currentRes.error,
+      previousData: previousRes.data
+    });
 
     const currentRow = Array.isArray(currentRes.data) ? currentRes.data[0] : currentRes.data
     const previousRow = Array.isArray(previousRes.data) ? previousRes.data[0] : previousRes.data
