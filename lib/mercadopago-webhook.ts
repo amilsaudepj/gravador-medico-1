@@ -106,13 +106,60 @@ export async function handleMercadoPagoWebhook(request: NextRequest) {
         }
       }
       
-      // 4️⃣ ATUALIZAR VENDA COM DADOS ENRIQUECIDOS
+      // 4️⃣ BUSCAR DADOS DO CHECKOUT (TELEFONE E CPF)
+      let checkoutPhone = null
+      let checkoutCpf = null
+      
+      try {
+        // Buscar por email + timestamp próximo (janela de 10 minutos)
+        const saleTime = new Date(sale.created_at)
+        const startWindow = new Date(saleTime.getTime() - 10 * 60 * 1000).toISOString()
+        const endWindow = new Date(saleTime.getTime() + 10 * 60 * 1000).toISOString()
+        
+        const { data: checkoutData } = await supabaseAdmin
+          .from('checkout_attempts')
+          .select('customer_phone, customer_cpf')
+          .eq('customer_email', sale.customer_email)
+          .gte('created_at', startWindow)
+          .lte('created_at', endWindow)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        
+        if (checkoutData) {
+          checkoutPhone = checkoutData.customer_phone
+          checkoutCpf = checkoutData.customer_cpf
+          console.log('📞 Dados do checkout encontrados:', {
+            phone: checkoutPhone ? '***' + checkoutPhone.slice(-4) : null,
+            cpf: checkoutCpf ? '***' + checkoutCpf.slice(-4) : null
+          })
+        } else {
+          console.log('⚠️ Nenhum checkout encontrado para:', {
+            email: sale.customer_email,
+            window: `${startWindow} - ${endWindow}`
+          })
+        }
+      } catch (error) {
+        console.warn('⚠️ Erro ao buscar dados do checkout:', error)
+      }
+      
+      // 5️⃣ ATUALIZAR VENDA COM DADOS ENRIQUECIDOS
+      const updatePayload: any = {
+        status: mapStatus(payment.status),
+        payment_details: payment // ENRIQUECIMENTO
+      }
+      
+      // Adicionar phone/cpf se disponíveis e ainda não existirem na venda
+      if (checkoutPhone && !sale.customer_phone) {
+        updatePayload.customer_phone = checkoutPhone
+      }
+      if (checkoutCpf && !sale.customer_cpf) {
+        updatePayload.customer_cpf = checkoutCpf
+      }
+      
       const { error: updateError } = await supabaseAdmin
         .from('sales')
-        .update({
-          status: mapStatus(payment.status),
-          payment_details: payment // ENRIQUECIMENTO
-        })
+        .update(updatePayload)
         .eq('id', sale.id)
       
       if (updateError) {
@@ -122,7 +169,7 @@ export async function handleMercadoPagoWebhook(request: NextRequest) {
       
       console.log('✅ Venda atualizada com sucesso')
       
-      // 5️⃣ SE APROVADO, ENFILEIRAR PROVISIONAMENTO E PROCESSAR
+      // 6️⃣ SE APROVADO, ENFILEIRAR PROVISIONAMENTO E PROCESSAR
       if (payment.status === 'approved' && sale) {
         console.log('✅ Pagamento aprovado! Enfileirando provisionamento...')
 
@@ -184,7 +231,7 @@ export async function handleMercadoPagoWebhook(request: NextRequest) {
         }
       }
       
-      // 6️⃣ MARCAR LOG COMO PROCESSADO
+      // 7️⃣ MARCAR LOG COMO PROCESSADO
       if (logEntry) {
         await supabaseAdmin
           .from('mp_webhook_logs')

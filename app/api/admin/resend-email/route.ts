@@ -38,7 +38,6 @@ export async function POST(request: NextRequest) {
     let query = supabaseAdmin
       .from('sales')
       .select('id, customer_email, customer_name, total_amount, lovable_user_id, lovable_password')
-      .eq('order_status', 'paid')
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -52,17 +51,19 @@ export async function POST(request: NextRequest) {
 
     if (saleError) {
       console.error('❌ Erro ao buscar venda:', saleError)
+      console.error('❌ Query details:', { saleId, customerEmail })
       return NextResponse.json(
-        { success: false, error: 'Erro ao buscar venda no banco' },
+        { success: false, error: 'Erro ao buscar venda no banco', details: saleError.message },
         { status: 500 }
       )
     }
 
     if (!sales || sales.length === 0) {
+      console.log('❌ Nenhuma venda encontrada:', { customerEmail, saleId })
       return NextResponse.json(
         { 
           success: false, 
-          error: 'Nenhuma venda paga encontrada para este cliente' 
+          error: 'Nenhuma venda encontrada com status paid/provisioning/active' 
         },
         { status: 404 }
       )
