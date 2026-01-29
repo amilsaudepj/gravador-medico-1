@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/audit-recovery",
-      "schedule": "*/2 * * * *"
+      "schedule": "0 */2 * * *"
     }
   ]
 }
