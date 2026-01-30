@@ -57,7 +57,6 @@ export default function SalesPage() {
   const [filteredSales, setFilteredSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
-  const [syncing, setSyncing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
@@ -319,36 +318,6 @@ export default function SalesPage() {
     }
   }
 
-  const handleSyncAll = async () => {
-    if (!confirm('Sincronizar TODAS as vendas do AppMax?\n\nIsso pode levar alguns minutos e irá buscar todas as vendas aprovadas que ainda não estão no sistema.')) {
-      return
-    }
-
-    setSyncing(true)
-    try {
-      const response = await fetch('/api/admin/sync-all-sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao sincronizar vendas')
-      }
-
-      alert(`✅ Sincronização completa!\n\n${data.new} vendas novas adicionadas\n${data.existing} vendas já existiam\nTotal AppMax: ${data.total}`)
-      
-      // Recarregar vendas
-      await loadSales()
-    } catch (error: any) {
-      console.error('Erro ao sincronizar:', error)
-      alert(`❌ Erro ao sincronizar vendas: ${error.message}`)
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   const handleRefund = async (sale: Sale) => {
     const saleId = sale.sale_id || (sale.source === 'sale' ? sale.id : null)
     if (!saleId) {
@@ -407,16 +376,6 @@ export default function SalesPage() {
 
           <SyncMercadoPagoButton />
           <SyncAppmaxButton />
-          
-          <button 
-            onClick={handleSyncAll} 
-            disabled={syncing}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Sincronizar TODAS as vendas do AppMax"
-          >
-            <Download className={`w-4 h-4 ${syncing ? 'animate-bounce' : ''}`} />
-            {syncing ? 'Sincronizando...' : 'Sync Completo'}
-          </button>
 
           <button onClick={loadSales} disabled={loading} className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 flex items-center gap-2">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />

@@ -36,18 +36,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Agrupar por email (eliminar duplicatas)
-    const uniqueCustomers = customers?.reduce((acc, sale) => {
+    const uniqueCustomers = customers?.reduce((acc, sale, index) => {
       const email = sale.customer_email
       if (!acc[email]) {
         acc[email] = {
+          id: `sales-${index}-${Date.now()}`, // ID único para a interface
           email: email,
-          name: sale.customer_name,
+          full_name: sale.customer_name, // ✅ Usar full_name para compatibilidade com LovableUser
+          name: sale.customer_name, // Manter name também para compatibilidade
           phone: sale.customer_phone,
           cpf: sale.customer_cpf,
           status: sale.status,
           created_at: sale.created_at,
           total_spent: sale.total_amount,
-          purchase_count: 1
+          purchase_count: 1,
+          role: 'user' // Default role
         }
       } else {
         // Cliente já existe, somar valor e incrementar contagem
@@ -58,7 +61,8 @@ export async function GET(request: NextRequest) {
           acc[email].created_at = sale.created_at
           acc[email].status = sale.status
           // Atualizar nome se o novo tiver mais informações (não for só username)
-          if (sale.customer_name && sale.customer_name.includes(' ') && !acc[email].name.includes(' ')) {
+          if (sale.customer_name && sale.customer_name.includes(' ') && (!acc[email].full_name || !acc[email].full_name.includes(' '))) {
+            acc[email].full_name = sale.customer_name
             acc[email].name = sale.customer_name
           }
         }

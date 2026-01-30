@@ -61,7 +61,7 @@ export const WelcomeEmail: React.FC<Readonly<WelcomeEmailProps>> = ({
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Bem-vindo ao Gravador Médico</title>
+        <title>Bem-vindo(a) ao Gravador Médico</title>
       </head>
       <body style={{
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
@@ -77,28 +77,38 @@ export const WelcomeEmail: React.FC<Readonly<WelcomeEmailProps>> = ({
                   <tbody>
                     <tr>
                       <td style={{ background: 'linear-gradient(135deg, ' + colors.primary + ' 0%, ' + colors.accent + ' 100%)', padding: '50px 40px', textAlign: 'center' }}>
-                        <div style={{ marginBottom: '20px' }}>
-                          <span style={{ fontSize: '48px', display: 'inline-block' }}>🎙️</span>
-                        </div>
-                        <h1 style={{ color: '#FFFFFF', fontSize: '28px', fontWeight: 700, margin: 0, letterSpacing: '-0.5px' }}>
-                          Bem-vindo ao Gravador Médico!
-                        </h1>
-                        <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px', margin: '12px 0 0 0' }}>
-                          Seu acesso está pronto para uso
-                        </p>
+                        <table width="100%" cellPadding={0} cellSpacing={0}>
+                          <tbody>
+                            <tr>
+                              <td align="center" style={{ paddingBottom: '20px' }}>
+                                <img src="https://www.gravadormedico.com.br/images/novo-icon-gravadormedico.png" alt="Gravador Médico" style={{ width: '60px', height: '60px', display: 'block', margin: '0 auto' }} />
+                              </td>
+                            </tr>
+                            <tr>
+                              <td align="center">
+                                <h1 style={{ color: '#FFFFFF', fontSize: '28px', fontWeight: 700, margin: 0, letterSpacing: '-0.5px' }}>
+                                  Bem-vindo(a) ao Gravador Médico
+                                </h1>
+                                <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px', margin: '12px 0 0 0' }}>
+                                  Seu acesso está pronto para uso
+                                </p>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </td>
                     </tr>
                     <tr>
                       <td style={{ padding: '40px' }}>
                         <p style={{ color: colors.textPrimary, fontSize: '18px', lineHeight: '1.6', margin: '0 0 24px 0' }}>
-                          Olá, <strong>{customerName}</strong>! 👋
+                          Olá, <strong>{customerName}</strong>,
                         </p>
                         <p style={{ color: colors.textSecondary, fontSize: '16px', lineHeight: '1.6', margin: '0 0 32px 0' }}>
                           Sua compra foi confirmada com sucesso! Abaixo estão suas credenciais de acesso à plataforma.
                         </p>
                         <div style={{ backgroundColor: colors.muted, borderRadius: '12px', padding: '28px', marginBottom: '32px', border: '1px solid ' + colors.primary + '20' }}>
                           <h2 style={{ color: colors.primary, fontSize: '16px', fontWeight: 600, margin: '0 0 20px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            🔐 Suas Credenciais de Acesso
+                            Suas Credenciais de Acesso
                           </h2>
                           <div style={{ marginBottom: '16px' }}>
                             <div style={{ color: colors.textSecondary, fontSize: '13px', marginBottom: '4px' }}>E-mail</div>
@@ -114,13 +124,13 @@ export const WelcomeEmail: React.FC<Readonly<WelcomeEmailProps>> = ({
                           </div>
                         </div>
                         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                          <a href="https://gravadormedico.com" style={{ display: 'inline-block', backgroundColor: colors.primary, color: '#FFFFFF', padding: '16px 40px', borderRadius: '8px', textDecoration: 'none', fontWeight: 600, fontSize: '16px' }}>
+                          <a href="https://gravadormedico.com/" style={{ display: 'inline-block', backgroundColor: colors.primary, color: '#FFFFFF', padding: '16px 40px', borderRadius: '8px', textDecoration: 'none', fontWeight: 600, fontSize: '16px' }}>
                             Acessar Plataforma →
                           </a>
                         </div>
                         <div style={{ backgroundColor: colors.background, borderRadius: '12px', padding: '24px', border: '1px solid ' + colors.border }}>
                           <h3 style={{ color: colors.textPrimary, fontSize: '14px', fontWeight: 600, margin: '0 0 16px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            📋 Detalhes do Pedido
+                            Detalhes do Pedido
                           </h3>
                           <table width="100%" cellPadding={0} cellSpacing={0}>
                             <tbody>

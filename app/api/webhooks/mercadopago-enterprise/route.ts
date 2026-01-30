@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendPurchaseConfirmationEmail } from '@/lib/email'
+import { processProvisioningQueue } from '@/lib/provisioning-worker'
 
 /**
  * 🔔 WEBHOOK ROUTE - MERCADO PAGO ENTERPRISE
@@ -7,7 +9,7 @@ import { createClient } from '@supabase/supabase-js'
  * Endpoint para receber notificações do Mercado Pago
  * URL de configuração no MP: https://seu-dominio.com/api/webhooks/mercadopago-enterprise
  * 
- * VERSÃO SIMPLIFICADA - Aceita webhooks e salva na tabela webhooks_logs
+ * VERSÃO COMPLETA - Aceita webhooks, atualiza vendas, envia emails e provisiona
  */
 
 // Supabase Admin Client
@@ -29,18 +31,24 @@ export async function POST(request: NextRequest) {
     const paymentId = data?.id || id
     
     // =====================================================
-    // 1️⃣ SEMPRE SALVAR LOG (tabela webhooks_logs com 's')
+    // 1️⃣ SEMPRE SALVAR LOG (tabela webhooks_logs)
     // =====================================================
     
     try {
       await supabaseAdmin
         .from('webhooks_logs')
         .insert({
-          gateway: 'mercadopago',
-          event_type: action || type || 'unknown',
-          payload: body,
-          status: 'received',
-          created_at: new Date().toISOString()
+          endpoint: '/api/webhooks/mercadopago-enterprise',
+          payload: {
+            ...body,
+            _meta: {
+              gateway: 'mercadopago',
+              event_type: action || type || 'unknown',
+              logged_at: new Date().toISOString()
+            }
+          },
+          response_status: 200,
+          received_at: new Date().toISOString()
         })
       console.log('✅ Log salvo em webhooks_logs')
     } catch (logError: any) {
@@ -172,6 +180,26 @@ export async function POST(request: NextRequest) {
       }
 
       if (saleId) {
+        // 📧 ENVIAR EMAIL DE CONFIRMAÇÃO DE COMPRA
+        const saleData = sale || (await supabaseAdmin.from('sales').select('*').eq('id', saleId).single()).data
+        
+        if (saleData?.customer_email) {
+          try {
+            console.log(`📧 Enviando email de confirmação para ${saleData.customer_email}...`)
+            await sendPurchaseConfirmationEmail({
+              to: saleData.customer_email,
+              customerName: saleData.customer_name || 'Cliente',
+              orderId: saleId,
+              orderValue: parseFloat(saleData.total_amount) || payment.transaction_amount || 0,
+              paymentMethod: 'mercadopago'
+            })
+            console.log(`✅ Email de confirmação de compra enviado!`)
+          } catch (emailError: any) {
+            console.error('⚠️ Erro ao enviar email de confirmação:', emailError.message)
+          }
+        }
+
+        // 🚀 ADICIONAR À FILA DE PROVISIONAMENTO
         const { data: existingQueue, error: queueCheckError } = await supabaseAdmin
           .from('provisioning_queue')
           .select('id')
@@ -192,6 +220,18 @@ export async function POST(request: NextRequest) {
           } else {
             console.log(`✅ Pedido ${saleId} adicionado à fila de provisionamento`)
           }
+        }
+
+        // ⚙️ PROCESSAR FILA IMEDIATAMENTE
+        try {
+          console.log('⚙️ Iniciando processamento da fila de provisionamento...')
+          const result = await processProvisioningQueue()
+          console.log('✅ Processamento concluído:', {
+            processed: result.processed,
+            failed: result.failed
+          })
+        } catch (provisioningError: any) {
+          console.error('⚠️ Erro ao processar fila:', provisioningError.message)
         }
       }
     }

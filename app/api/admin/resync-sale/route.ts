@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { processProvisioningQueue } from '@/lib/provisioning-worker'
 
 // =====================================================
 // API: Resincronizar Venda (Botão de Pânico)
 // =====================================================
 // Força a reinserção de uma venda na fila de provisionamento
-// Usado quando um cliente não recebeu acesso
+// E PROCESSA IMEDIATAMENTE (cria usuário + envia email)
 // =====================================================
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -33,8 +34,8 @@ export async function POST(request: NextRequest) {
     // 1️⃣ BUSCAR VENDA NO BANCO
     let query = supabaseAdmin
       .from('sales')
-      .select('id, customer_email, customer_name, order_status, total_amount')
-      .eq('order_status', 'paid')
+      .select('id, customer_email, customer_name, status, total_amount')
+      .in('status', ['paid', 'provisioning', 'active'])
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
     console.log('✅ Venda encontrada:', {
       id: sale.id,
       email: sale.customer_email,
-      status: sale.order_status,
+      status: sale.status,
       amount: sale.total_amount
     })
 
@@ -82,12 +83,23 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (existingQueue) {
-      console.log('⚠️ Item já está na fila como PENDING')
+      console.log('⚠️ Item já está na fila como PENDING - processando agora...')
+      
+      // Processar a fila imediatamente
+      let provisioningResult: any = null
+      try {
+        provisioningResult = await processProvisioningQueue()
+        console.log('✅ Processamento concluído:', provisioningResult)
+      } catch (provError: any) {
+        console.error('⚠️ Erro no processamento:', provError.message)
+      }
+      
       return NextResponse.json({
         success: true,
-        message: 'Venda já está na fila de processamento',
+        message: `Venda de ${sale.customer_email} processada! (já estava na fila)`,
         queueId: existingQueue.id,
-        alreadyQueued: true
+        alreadyQueued: true,
+        provisioningResult
       })
     }
 
@@ -106,27 +118,58 @@ export async function POST(request: NextRequest) {
       console.log('🔄 Forçando nova entrada na fila...')
     }
 
-    // 4️⃣ INSERIR/ATUALIZAR NA FILA DE PROVISIONAMENTO
-    const queuePayload = {
-      sale_id: sale.id,
-      customer_email: sale.customer_email,
-      customer_name: sale.customer_name,
-      status: 'pending' as const,
-      retry_count: 0,
-      last_error: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }
-
-    // Tentar fazer UPSERT (atualizar se existir, inserir se não existir)
-    const { data: queueItem, error: queueError } = await supabaseAdmin
+    // 4️⃣ INSERIR NA FILA DE PROVISIONAMENTO
+    // Primeiro, deletar entrada existente se houver (para evitar duplicatas)
+    await supabaseAdmin
       .from('provisioning_queue')
-      .upsert(queuePayload, { 
-        onConflict: 'sale_id',
-        ignoreDuplicates: false 
+      .delete()
+      .eq('sale_id', sale.id)
+
+    // Agora inserir nova entrada com status pending
+    // Tentar com campos completos primeiro, depois fallback para mínimo
+    let queueItem: any = null
+    let queueError: any = null
+
+    // Tentar INSERT com campos customer_email e customer_name
+    const { data: queueData1, error: queueErr1 } = await supabaseAdmin
+      .from('provisioning_queue')
+      .insert({
+        sale_id: sale.id,
+        customer_email: sale.customer_email,
+        customer_name: sale.customer_name,
+        status: 'pending',
+        retry_count: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       })
       .select()
       .single()
+
+    if (queueErr1) {
+      console.log('⚠️ Erro com payload completo, tentando payload mínimo...')
+      console.log('⚠️ Erro:', queueErr1.message)
+      
+      // Fallback: INSERT apenas com sale_id e status
+      const { data: queueData2, error: queueErr2 } = await supabaseAdmin
+        .from('provisioning_queue')
+        .insert({
+          sale_id: sale.id,
+          status: 'pending',
+          retry_count: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+      if (queueErr2) {
+        queueError = queueErr2
+      } else {
+        queueItem = queueData2
+      }
+    } else {
+      queueItem = queueData1
+    }
 
     if (queueError) {
       console.error('❌ Erro ao inserir na fila:', queueError)
@@ -139,7 +182,17 @@ export async function POST(request: NextRequest) {
     console.log('✅ Venda adicionada à fila de provisionamento')
     console.log('🆔 Queue ID:', queueItem.id)
 
-    // 5️⃣ REGISTRAR LOG DA AÇÃO MANUAL
+    // 5️⃣ PROCESSAR A FILA IMEDIATAMENTE (criar usuário + enviar email)
+    console.log('🚀 Iniciando processamento imediato da fila...')
+    let provisioningResult: any = null
+    try {
+      provisioningResult = await processProvisioningQueue()
+      console.log('✅ Processamento concluído:', provisioningResult)
+    } catch (provError: any) {
+      console.error('⚠️ Erro no processamento (a venda está na fila para retry):', provError.message)
+    }
+
+    // 6️⃣ REGISTRAR LOG DA AÇÃO MANUAL
     await supabaseAdmin
       .from('integration_logs')
       .insert({
@@ -161,11 +214,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Venda de ${sale.customer_email} adicionada na fila de provisionamento`,
+      message: `Venda de ${sale.customer_email} processada! Usuário criado e email enviado.`,
       queueId: queueItem.id,
       saleId: sale.id,
       customerEmail: sale.customer_email,
-      alreadyQueued: false
+      alreadyQueued: false,
+      provisioningResult
     })
 
   } catch (error) {

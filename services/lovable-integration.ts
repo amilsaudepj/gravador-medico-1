@@ -9,7 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 const LOVABLE_EDGE_FUNCTION_URL = process.env.NEXT_PUBLIC_LOVABLE_EDGE_FUNCTION_URL || 
   'https://acouwzdniytqhaesgtpr.supabase.co/functions/v1/admin-user-manager'
 
-const API_SECRET = 'webhook-appmax-2026-secure-key'
+const API_SECRET = '26+Sucesso+GH'
 
 // Função helper para criar cliente Supabase (apenas server-side)
 function getSupabaseClient() {

@@ -3,6 +3,7 @@ import { supabaseAdmin } from './supabase'
 import { getPaymentStatus } from './mercadopago'
 import { processProvisioningQueue } from './provisioning-worker'
 import { trackPurchase } from './tracking/core'
+import { sendPurchaseConfirmationEmail } from './email'
 
 /**
  * 🔔 WEBHOOK MERCADO PAGO - COM RACE CONDITION FIX
@@ -195,6 +196,24 @@ export async function handleMercadoPagoWebhook(request: NextRequest) {
         }).catch(err => {
           console.error(`[MercadoPago ${payment.id}] ❌ Tracking Purchase erro inesperado:`, err)
         })
+
+        // 📧 ENVIAR EMAIL DE CONFIRMAÇÃO DE COMPRA (IMEDIATO)
+        if (sale.customer_email) {
+          try {
+            console.log(`📧 Enviando email de confirmação para ${sale.customer_email}...`)
+            await sendPurchaseConfirmationEmail({
+              to: sale.customer_email,
+              customerName: sale.customer_name || 'Cliente',
+              orderId: sale.id,
+              orderValue: parseFloat(sale.total_amount) || payment.transaction_amount || 0,
+              paymentMethod: 'mercadopago'
+            })
+            console.log(`✅ Email de confirmação de compra enviado!`)
+          } catch (emailError: any) {
+            console.error('⚠️ Erro ao enviar email de confirmação:', emailError.message)
+            // Não falha o webhook por causa de email
+          }
+        }
 
         // ✅ Limpar carrinho abandonado quando compra é aprovada
         if (sale.customer_email) {

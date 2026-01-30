@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './supabase'
-import { createLovableUser, generateSecurePassword } from '@/services/lovable-integration'
+import { createLovableUser, generateSecurePassword, listLovableUsers, resetLovableUserPassword } from '@/services/lovable-integration'
 
 /**
  * 🏭 PROVISIONING WORKER V2 - MODULAR & FAULT-TOLERANT
@@ -77,13 +77,11 @@ async function executeUserCreation(item: any, order: any): Promise<{
   try {
     console.log(`[${item.id}] 👤 STAGE: creating_user`)
     
-    // Atualizar stage para creating_user
+    // Atualizar status para processing
     await supabaseAdmin
       .from('provisioning_queue')
       .update({ 
-        stage: 'creating_user',
-        status: 'processing',
-        started_at: new Date().toISOString()
+        status: 'processing'
       })
       .eq('id', item.id)
     
@@ -101,18 +99,55 @@ async function executeUserCreation(item: any, order: any): Promise<{
       throw new Error(result.error || 'Falha ao criar usuário no Lovable')
     }
     
-    const userId = result.user?.id || 'existing'
+    let userId = result.user?.id || null
+    let finalPassword = password
     
-    // ✅ SUCESSO: Salvar credenciais e avançar stage
-    await supabaseAdmin
+    // Se usuário já existe, buscar ID real e resetar senha
+    if (result.alreadyExists) {
+      console.log(`[${item.id}] ℹ️ Usuário já existe, buscando ID e resetando senha...`)
+      
+      // Buscar ID real do usuário
+      const { success: listSuccess, users } = await listLovableUsers()
+      if (listSuccess && users) {
+        const existingUser = users.find(u => u.email === order.customer_email)
+        if (existingUser) {
+          userId = existingUser.id
+          console.log(`[${item.id}] 🔑 ID encontrado: ${userId}`)
+          
+          // Resetar senha no Lovable
+          const resetResult = await resetLovableUserPassword({
+            userId: existingUser.id,
+            newPassword: password
+          })
+          
+          if (resetResult.success) {
+            console.log(`[${item.id}] ✅ Senha resetada com sucesso`)
+          } else {
+            console.warn(`[${item.id}] ⚠️ Erro ao resetar senha: ${resetResult.error}`)
+            // Não falhar - ainda podemos tentar enviar email
+          }
+        }
+      }
+      
+      if (!userId) {
+        userId = 'existing'
+      }
+    }
+    
+    // ✅ SUCESSO: Atualizar status para processing (colunas compatíveis)
+    const { error: updateError } = await supabaseAdmin
       .from('provisioning_queue')
       .update({
-        stage: 'sending_credentials',
-        lovable_user_id: userId,
-        lovable_password: password,
+        status: 'processing',
         updated_at: new Date().toISOString()
       })
       .eq('id', item.id)
+    
+    if (updateError) {
+      console.error(`[${item.id}] ❌ Erro ao atualizar status para processing:`, updateError)
+    } else {
+      console.log(`[${item.id}] ✅ Status atualizado para processing`)
+    }
     
     // Atualizar status do pedido
     await supabaseAdmin
@@ -120,26 +155,29 @@ async function executeUserCreation(item: any, order: any): Promise<{
       .update({ order_status: 'provisioning' })
       .eq('id', order.id)
     
-    // Log de sucesso
-    await supabaseAdmin.from('integration_logs').insert({
-      order_id: order.id,
-      action: 'create_user_lovable',
-      status: 'success',
-      recipient_email: order.customer_email,
-      user_id: userId,
-      details: {
-        stage: 'creating_user',
-        already_exists: result.alreadyExists,
-        duration_ms: Date.now() - startTime
-      },
-      duration_ms: Date.now() - startTime
-    })
+    // Log de sucesso - usar apenas colunas que existem
+    try {
+      await supabaseAdmin.from('integration_logs').insert({
+        order_id: order.id,
+        action: 'create_user_lovable',
+        status: 'success',
+        recipient_email: order.customer_email,
+        details: {
+          user_id: userId,
+          already_exists: result.alreadyExists,
+          duration_ms: Date.now() - startTime
+        },
+        created_at: new Date().toISOString()
+      })
+    } catch (logError) {
+      console.warn(`[${item.id}] ⚠️ Erro ao salvar log (não crítico):`, logError)
+    }
     
     console.log(`[${item.id}] ✅ Usuário criado: ${userId}`)
     
     return {
       success: true,
-      userId,
+      userId: userId || undefined,
       password,
       alreadyExists: result.alreadyExists
     }
@@ -158,31 +196,32 @@ async function executeUserCreation(item: any, order: any): Promise<{
     await supabaseAdmin
       .from('provisioning_queue')
       .update({
-        stage: newRetryCount >= maxRetries ? 'failed_permanent' : 'failed_at_user',
         status: 'failed',
         last_error: error.message,
         retry_count: newRetryCount,
-        next_retry_at: nextRetryAt,
-        updated_at: new Date().toISOString()
+        next_retry_at: nextRetryAt
       })
       .eq('id', item.id)
     
-    // Log de erro
-    await supabaseAdmin.from('integration_logs').insert({
-      order_id: order.id,
-      action: 'create_user_lovable',
-      status: 'error',
-      recipient_email: order.customer_email,
-      error_message: error.message,
-      details: {
-        stage: 'creating_user',
-        retry_count: newRetryCount,
-        max_retries: maxRetries,
-        next_retry_at: nextRetryAt,
-        duration_ms: Date.now() - startTime
-      },
-      duration_ms: Date.now() - startTime
-    })
+    // Log de erro - ignorar erros de colunas faltantes
+    try {
+      await supabaseAdmin.from('integration_logs').insert({
+        order_id: order.id,
+        action: 'create_user_lovable',
+        status: 'error',
+        recipient_email: order.customer_email,
+        error_message: error.message,
+        details: {
+          retry_count: newRetryCount,
+          max_retries: maxRetries,
+          next_retry_at: nextRetryAt,
+          duration_ms: Date.now() - startTime
+        },
+        created_at: new Date().toISOString()
+      })
+    } catch (logError) {
+      console.warn(`[${item.id}] ⚠️ Erro ao salvar log de erro (não crítico):`, logError)
+    }
     
     return {
       success: false,
@@ -227,7 +266,6 @@ async function executeSendCredentials(item: any, order: any): Promise<{
       await supabaseAdmin
         .from('provisioning_queue')
         .update({
-          stage: 'completed',
           status: 'completed',
           completed_at: new Date().toISOString()
         })
@@ -267,7 +305,6 @@ async function executeSendCredentials(item: any, order: any): Promise<{
     await supabaseAdmin
       .from('provisioning_queue')
       .update({
-        stage: 'completed',
         status: 'completed',
         completed_at: new Date().toISOString()
       })
@@ -314,31 +351,32 @@ async function executeSendCredentials(item: any, order: any): Promise<{
     await supabaseAdmin
       .from('provisioning_queue')
       .update({
-        stage: newRetryCount >= maxRetries ? 'failed_permanent' : 'failed_at_email',
         status: 'failed',
         last_error: error.message,
         retry_count: newRetryCount,
-        next_retry_at: nextRetryAt,
-        updated_at: new Date().toISOString()
+        next_retry_at: nextRetryAt
       })
       .eq('id', item.id)
     
-    // Log de erro
-    await supabaseAdmin.from('integration_logs').insert({
-      order_id: order.id,
-      action: 'send_email',
-      status: 'error',
-      recipient_email: order.customer_email,
-      error_message: error.message,
-      details: {
-        stage: 'sending_credentials',
-        retry_count: newRetryCount,
-        max_retries: maxRetries,
-        next_retry_at: nextRetryAt,
-        duration_ms: Date.now() - startTime
-      },
-      duration_ms: Date.now() - startTime
-    })
+    // Log de erro - ignorar erros de colunas faltantes
+    try {
+      await supabaseAdmin.from('integration_logs').insert({
+        order_id: order.id,
+        action: 'send_email',
+        status: 'error',
+        recipient_email: order.customer_email,
+        error_message: error.message,
+        details: {
+          retry_count: newRetryCount,
+          max_retries: maxRetries,
+          next_retry_at: nextRetryAt,
+          duration_ms: Date.now() - startTime
+        },
+        created_at: new Date().toISOString()
+      })
+    } catch (logError) {
+      console.warn(`[${item.id}] ⚠️ Erro ao salvar log de erro de email (não crítico)`)
+    }
     
     return {
       success: false,
@@ -398,7 +436,6 @@ export async function processProvisioningQueue(): Promise<ProvisioningResult> {
         await supabaseAdmin
           .from('provisioning_queue')
           .update({
-            stage: 'failed_permanent',
             status: 'failed',
             last_error: 'Esgotadas tentativas de retry'
           })
@@ -412,7 +449,7 @@ export async function processProvisioningQueue(): Promise<ProvisioningResult> {
         result.failed++
         result.errors.push({
           sale_id: saleId,
-          stage: item.stage || 'unknown',
+          stage: item.stage || item.status || 'unknown',
           error: 'Esgotadas tentativas de retry'
         })
         
@@ -461,7 +498,7 @@ export async function processProvisioningQueue(): Promise<ProvisioningResult> {
       // =====================================================
       // ROTEAMENTO POR STAGE (Máquina de Estados)
       // =====================================================
-      const currentStage = item.stage || 'queued'
+      const currentStage = item.stage || item.status || 'queued'
 
       switch (currentStage) {
         case 'queued':
@@ -474,16 +511,15 @@ export async function processProvisioningQueue(): Promise<ProvisioningResult> {
           if (userResult.success) {
             result.stages!.users_created++
             
-            // Se criou usuário, já tenta enviar email na mesma execução
-            // Recarregar item atualizado
-            const { data: updatedItem } = await supabaseAdmin
-              .from('provisioning_queue')
-              .select('*')
-              .eq('id', item.id)
-              .single()
+            // 🔥 FIX: Usar a senha retornada diretamente, não depender da coluna lovable_password
+            const passwordToSend = userResult.password
             
-            if (updatedItem && updatedItem.stage === 'sending_credentials') {
-              const emailResult = await executeSendCredentials(updatedItem, orderData)
+            if (passwordToSend) {
+              console.log(`[${item.id}] � Enviando email com senha gerada...`)
+              
+              // Criar item com a senha para enviar email
+              const itemWithPassword = { ...item, lovable_password: passwordToSend }
+              const emailResult = await executeSendCredentials(itemWithPassword, orderData)
               
               if (emailResult.success) {
                 result.stages!.emails_sent++
@@ -495,6 +531,8 @@ export async function processProvisioningQueue(): Promise<ProvisioningResult> {
                   error: emailResult.error || 'Erro desconhecido'
                 })
               }
+            } else {
+              console.warn(`[${item.id}] ⚠️ Senha não retornada, não é possível enviar email`)
             }
           } else {
             result.failed++
@@ -590,11 +628,10 @@ export async function processSpecificOrder(orderId: string): Promise<{
       .maybeSingle()
 
     if (existingItem) {
-      // Resetar para queued para reprocessar do início
+      // Resetar para pending para reprocessar do início
       await supabaseAdmin
         .from('provisioning_queue')
         .update({
-          stage: 'queued',
           status: 'pending',
           retry_count: 0,
           last_error: null,
@@ -607,7 +644,6 @@ export async function processSpecificOrder(orderId: string): Promise<{
         .from('provisioning_queue')
         .insert({
           sale_id: orderId,
-          stage: 'queued',
           status: 'pending',
           retry_count: 0
         })

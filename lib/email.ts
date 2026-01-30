@@ -43,7 +43,7 @@ export async function sendWelcomeEmail(params: SendWelcomeEmailParams) {
     const { data, error } = await resend.emails.send({
       from: 'Gravador Médico <suporte@gravadormedico.com.br>',
       to: params.to,
-      subject: 'Bem-vindo ao Gravador Médico - Seus Dados de Acesso',
+      subject: 'Bem-vindo(a) ao Gravador Médico - Seus Dados de Acesso',
       react: emailComponent as any,
     })
 
@@ -54,7 +54,7 @@ export async function sendWelcomeEmail(params: SendWelcomeEmailParams) {
       await supabaseAdmin.from('email_logs').insert({
         recipient_email: params.to,
         recipient_name: params.customerName,
-        subject: 'Bem-vindo ao Gravador Médico - Seus Dados de Acesso',
+        subject: 'Bem-vindo(a) ao Gravador Médico - Seus Dados de Acesso',
         html_content: htmlContent || null,
         email_type: 'welcome',
         from_email: 'suporte@gravadormedico.com.br',
@@ -77,7 +77,7 @@ export async function sendWelcomeEmail(params: SendWelcomeEmailParams) {
       email_id: data?.id,
       recipient_email: params.to,
       recipient_name: params.customerName,
-      subject: 'Bem-vindo ao Gravador Médico - Seus Dados de Acesso',
+      subject: 'Bem-vindo(a) ao Gravador Médico - Seus Dados de Acesso',
       html_content: htmlContent || null,
       email_type: 'welcome',
       from_email: 'suporte@gravadormedico.com.br',

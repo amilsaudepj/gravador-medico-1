@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { resetLovableUserPassword, listLovableUsers, generateSecurePassword } from '@/services/lovable-integration'
 
 // =====================================================
 // API: Reenviar E-mail (Botão de Pânico)
@@ -87,18 +88,74 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .single()
 
-    if (!queueData?.lovable_user_id || !queueData?.lovable_password) {
-      console.log('⚠️ Cliente não tem credenciais Lovable registradas')
-      return NextResponse.json({
-        success: false,
-        error: 'Cliente não possui credenciais registradas. Execute "Resincronizar Venda" primeiro.'
-      }, { status: 400 })
+    let lovablePassword = queueData?.lovable_password
+    let lovableUserId = queueData?.lovable_user_id
+
+    // 2.1️⃣ SE NÃO TEM CREDENCIAIS, BUSCAR USUÁRIO NO LOVABLE E GERAR NOVA SENHA
+    if (!lovablePassword) {
+      console.log('⚠️ Cliente não tem credenciais salvas, buscando no Lovable...')
+      
+      // Buscar usuário no Lovable pelo email
+      const { success: listSuccess, users } = await listLovableUsers()
+      
+      if (listSuccess && users) {
+        const lovableUser = users.find(u => u.email === sale.customer_email)
+        
+        if (lovableUser) {
+          console.log('✅ Usuário encontrado no Lovable:', lovableUser.id)
+          lovableUserId = lovableUser.id
+          
+          // Gerar nova senha
+          const newPassword = generateSecurePassword(12)
+          
+          // Resetar senha no Lovable
+          const resetResult = await resetLovableUserPassword({
+            userId: lovableUser.id,
+            newPassword
+          })
+          
+          if (resetResult.success) {
+            console.log('✅ Nova senha gerada e aplicada no Lovable')
+            lovablePassword = newPassword
+            
+            // Salvar nova senha na provisioning_queue
+            await supabaseAdmin
+              .from('provisioning_queue')
+              .upsert({
+                sale_id: sale.id,
+                email: sale.customer_email,
+                status: 'completed',
+                lovable_user_id: lovableUser.id,
+                lovable_password: newPassword,
+                completed_at: new Date().toISOString()
+              }, { onConflict: 'sale_id' })
+          } else {
+            console.error('❌ Erro ao resetar senha:', resetResult.error)
+            return NextResponse.json({
+              success: false,
+              error: `Erro ao gerar nova senha: ${resetResult.error}`
+            }, { status: 500 })
+          }
+        } else {
+          console.log('❌ Usuário não encontrado no Lovable')
+          return NextResponse.json({
+            success: false,
+            error: 'Usuário não encontrado no Lovable. Execute "Resincronizar Venda" primeiro para criar o usuário.'
+          }, { status: 400 })
+        }
+      } else {
+        return NextResponse.json({
+          success: false,
+          error: 'Erro ao conectar com Lovable. Tente novamente.'
+        }, { status: 500 })
+      }
     }
 
-    const lovablePassword = queueData.lovable_password
+    console.log('🔐 Senha para envio:', lovablePassword ? '***' : 'N/A')
 
     // 3️⃣ CONSTRUIR HTML DO EMAIL
-    const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.gravadormedico.com.br'}/login`
+    const loginUrl = 'https://gravadormedico.com/'
+    const iconUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.gravadormedico.com.br'}/images/novo-icon-gravadormedico.png`
     
     const emailHtml = `
 <!DOCTYPE html>
@@ -106,54 +163,74 @@ export async function POST(request: NextRequest) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bem-vindo ao Gravador Médico</title>
+  <title>Bem-vindo(a) ao Gravador Médico</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 40px 20px;">
+<body style="margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F7F9FA;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #F7F9FA; padding: 40px 20px;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px -4px rgba(22, 160, 133, 0.15); overflow: hidden;">
           
           <!-- Header -->
           <tr>
-            <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; text-align: center;">
-              <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: bold;">🎉 Bem-vindo!</h1>
-              <p style="margin: 10px 0 0 0; color: #e0e7ff; font-size: 16px;">Seu acesso está pronto</p>
+            <td style="background-color: #16A085; padding: 32px 40px; text-align: center;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center">
+                    <img src="${iconUrl}" alt="Gravador Médico" style="width: 60px; height: 60px; margin-bottom: 12px;" />
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center">
+                    <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">
+                      Gravador Médico
+                    </h1>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Title -->
+          <tr>
+            <td style="padding: 40px 40px 20px 40px; text-align: center;">
+              <h1 style="margin: 0; color: #1A2E38; font-size: 28px; font-weight: 700;">Bem-vindo(a) ao Gravador Médico</h1>
+              <p style="margin: 12px 0 0 0; color: #5C7080; font-size: 16px;">Seu acesso está pronto para uso</p>
             </td>
           </tr>
 
           <!-- Content -->
           <tr>
-            <td style="padding: 40px;">
-              <p style="margin: 0 0 20px 0; color: #374151; font-size: 16px; line-height: 1.6;">
-                Olá <strong>${sale.customer_name || 'Cliente'}</strong>! 👋
+            <td style="padding: 20px 40px 40px 40px;">
+              <p style="margin: 0 0 20px 0; color: #1A2E38; font-size: 16px; line-height: 1.6;">
+                Olá <strong>${sale.customer_name || 'Cliente'}</strong>,
               </p>
               
-              <p style="margin: 0 0 30px 0; color: #374151; font-size: 16px; line-height: 1.6;">
-                Seu pagamento foi confirmado e seu acesso ao <strong>Gravador Médico</strong> está liberado!
+              <p style="margin: 0 0 30px 0; color: #5C7080; font-size: 16px; line-height: 1.6;">
+                Seu pagamento foi confirmado e seu acesso ao <strong style="color: #16A085;">Gravador Médico</strong> está liberado!
               </p>
 
               <!-- Credentials Box -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border-radius: 12px; border: 2px solid #e5e7eb; margin: 0 0 30px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #F7F9FA; border-radius: 12px; border: 1px solid #D8DEE4; margin: 0 0 30px 0;">
                 <tr>
                   <td style="padding: 24px;">
-                    <p style="margin: 0 0 16px 0; color: #6b7280; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-                      🔐 Suas Credenciais
+                    <p style="margin: 0 0 16px 0; color: #16A085; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                      Suas Credenciais de Acesso
                     </p>
                     
                     <table width="100%" cellpadding="0" cellspacing="0">
                       <tr>
                         <td style="padding: 8px 0;">
-                          <p style="margin: 0; color: #6b7280; font-size: 13px;">E-mail:</p>
-                          <p style="margin: 4px 0 0 0; color: #111827; font-size: 16px; font-weight: 600; font-family: 'Courier New', monospace;">
+                          <p style="margin: 0; color: #5C7080; font-size: 13px;">E-mail:</p>
+                          <p style="margin: 4px 0 0 0; color: #1A2E38; font-size: 16px; font-weight: 600; font-family: 'Courier New', monospace;">
                             ${sale.customer_email}
                           </p>
                         </td>
                       </tr>
                       <tr>
                         <td style="padding: 16px 0 8px 0;">
-                          <p style="margin: 0; color: #6b7280; font-size: 13px;">Senha:</p>
-                          <p style="margin: 4px 0 0 0; color: #111827; font-size: 16px; font-weight: 600; font-family: 'Courier New', monospace;">
+                          <p style="margin: 0; color: #5C7080; font-size: 13px;">Senha:</p>
+                          <p style="margin: 4px 0 0 0; color: #1A2E38; font-size: 16px; font-weight: 600; font-family: 'Courier New', monospace;">
                             ${lovablePassword}
                           </p>
                         </td>
@@ -167,22 +244,22 @@ export async function POST(request: NextRequest) {
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center" style="padding: 0 0 30px 0;">
-                    <a href="${loginUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; padding: 16px 48px; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
-                      🚀 Acessar Plataforma
+                    <a href="${loginUrl}" style="display: inline-block; background-color: #16A085; color: #ffffff; text-decoration: none; padding: 16px 48px; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 20px -4px rgba(22, 160, 133, 0.4);">
+                      Acessar Plataforma
                     </a>
                   </td>
                 </tr>
               </table>
 
               <!-- Instructions -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="border-top: 2px solid #e5e7eb; padding-top: 30px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-top: 1px solid #D8DEE4; padding-top: 30px;">
                 <tr>
                   <td>
-                    <p style="margin: 0 0 12px 0; color: #374151; font-size: 15px; font-weight: 600;">
-                      📝 Primeiros Passos:
+                    <p style="margin: 0 0 12px 0; color: #1A2E38; font-size: 15px; font-weight: 600;">
+                      Primeiros Passos:
                     </p>
-                    <ol style="margin: 0; padding-left: 20px; color: #6b7280; font-size: 14px; line-height: 1.8;">
-                      <li>Clique no botão acima ou acesse: <a href="${loginUrl}" style="color: #667eea;">${loginUrl}</a></li>
+                    <ol style="margin: 0; padding-left: 20px; color: #5C7080; font-size: 14px; line-height: 1.8;">
+                      <li>Clique no botão acima ou acesse: <a href="${loginUrl}" style="color: #16A085;">${loginUrl}</a></li>
                       <li>Faça login com seu e-mail e senha</li>
                       <li>Explore todas as funcionalidades da plataforma</li>
                       <li>Em caso de dúvidas, entre em contato conosco</li>
@@ -192,11 +269,11 @@ export async function POST(request: NextRequest) {
               </table>
 
               <!-- Security Note -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 30px; background-color: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 30px; background-color: #FEF3C7; border-radius: 8px; border-left: 4px solid #F59E0B;">
                 <tr>
                   <td style="padding: 16px;">
-                    <p style="margin: 0; color: #92400e; font-size: 13px; line-height: 1.5;">
-                      <strong>🔒 Dica de Segurança:</strong><br>
+                    <p style="margin: 0; color: #92400E; font-size: 13px; line-height: 1.5;">
+                      <strong>Dica de Segurança:</strong><br>
                       Recomendamos alterar sua senha no primeiro acesso. Nunca compartilhe suas credenciais com terceiros.
                     </p>
                   </td>
@@ -207,11 +284,11 @@ export async function POST(request: NextRequest) {
 
           <!-- Footer -->
           <tr>
-            <td style="background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
-              <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">
+            <td style="background-color: #F7F9FA; padding: 30px; text-align: center; border-top: 1px solid #D8DEE4;">
+              <p style="margin: 0 0 8px 0; color: #5C7080; font-size: 14px;">
                 Precisa de ajuda? Entre em contato conosco
               </p>
-              <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+              <p style="margin: 0; color: #8899A6; font-size: 12px;">
                 © ${new Date().getFullYear()} Gravador Médico. Todos os direitos reservados.
               </p>
             </td>
@@ -230,7 +307,7 @@ export async function POST(request: NextRequest) {
     const emailData = {
       from: 'Gravador Médico <suporte@gravadormedico.com.br>',
       to: sale.customer_email,
-      subject: '🎉 Bem-vindo ao Gravador Médico - Seu Acesso Está Pronto!',
+      subject: 'Bem-vindo(a) ao Gravador Médico - Seu Acesso Está Pronto',
       html: emailHtml,
       tags: [
         { name: 'type', value: 'welcome' },
@@ -273,7 +350,7 @@ export async function POST(request: NextRequest) {
         email_id: emailResult?.id,
         recipient_email: sale.customer_email,
         recipient_name: sale.customer_name,
-        subject: '🎉 Bem-vindo ao Gravador Médico - Seu Acesso Está Pronto!',
+        subject: 'Bem-vindo(a) ao Gravador Médico - Seu Acesso Está Pronto',
         html_content: emailHtml,
         email_type: 'welcome',
         status: 'sent',

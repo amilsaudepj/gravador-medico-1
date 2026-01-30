@@ -126,6 +126,13 @@ export default function LovableUsersPage() {
     return bannedUntil > now
   }
 
+  // Verifica se o usuário tem um ID real do Lovable (não é gerado da sales)
+  const hasRealLovableId = (user: LovableUser): boolean => {
+    // IDs gerados começam com "sales-" e não são UUIDs válidos do Lovable
+    if (!user.id) return false
+    return !user.id.startsWith('sales-')
+  }
+
   const getUserStatusBadge = (user: LovableUser) => {
     if (isUserBanned(user)) {
       return (
@@ -641,7 +648,7 @@ export default function LovableUsersPage() {
                           <Key className="h-4 w-4" />
                         </Button>
 
-                        {/* Desativar/Reativar */}
+                        {/* Desativar/Reativar - Apenas se tem ID real do Lovable */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -649,16 +656,20 @@ export default function LovableUsersPage() {
                             setSelectedUser(user)
                             setDeactivateDialogOpen(true)
                           }}
+                          disabled={!hasRealLovableId(user)}
                           className={isUserBanned(user) 
-                            ? "text-green-400 hover:text-green-300 hover:bg-gray-700" 
-                            : "text-yellow-400 hover:text-yellow-300 hover:bg-gray-700"
+                            ? "text-green-400 hover:text-green-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed" 
+                            : "text-yellow-400 hover:text-yellow-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
                           }
-                          title={isUserBanned(user) ? "Reativar usuário" : "Desativar usuário"}
+                          title={!hasRealLovableId(user) 
+                            ? "Execute 'Resincronizar Venda' primeiro para criar o usuário no Lovable" 
+                            : isUserBanned(user) ? "Reativar usuário" : "Desativar usuário"
+                          }
                         >
                           {isUserBanned(user) ? <CheckCircle className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
                         </Button>
 
-                        {/* Excluir */}
+                        {/* Excluir - Apenas se tem ID real do Lovable */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -666,8 +677,12 @@ export default function LovableUsersPage() {
                             setSelectedUser(user)
                             setDeleteDialogOpen(true)
                           }}
-                          className="text-red-400 hover:text-red-300 hover:bg-gray-700"
-                          title="Excluir usuário"
+                          disabled={!hasRealLovableId(user)}
+                          className="text-red-400 hover:text-red-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={!hasRealLovableId(user) 
+                            ? "Execute 'Resincronizar Venda' primeiro para criar o usuário no Lovable" 
+                            : "Excluir usuário"
+                          }
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
