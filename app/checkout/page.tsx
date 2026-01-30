@@ -22,6 +22,7 @@ import {
   Zap,
   Star,
   AlertCircle,
+  AlertTriangle,
   Sparkles,
   User,
   Mail,
@@ -98,6 +99,18 @@ export default function CheckoutPage() {
   const secureCardFormRef = useRef<SecureCardFormHandle>(null)
   const [secureCardToken, setSecureCardToken] = useState<string | null>(null)
   const [secureCardReady, setSecureCardReady] = useState(false)
+  
+  // 🔄 Fallback AppMax - Modal de retentativa
+  const [showAppmaxFallback, setShowAppmaxFallback] = useState(false)
+  const [appmaxCardData, setAppmaxCardData] = useState({
+    number: "",
+    holderName: "",
+    expiry: "",
+    cvv: "",
+    installments: 1
+  })
+  const [appmaxLoading, setAppmaxLoading] = useState(false)
+  const [mpErrorMessage, setMpErrorMessage] = useState("")
   
   // Estado para dados PIX
   const [pixData, setPixData] = useState<{
@@ -872,9 +885,132 @@ export default function CheckoutPage() {
       }
     } catch (error: any) {
       console.error('Erro no checkout:', error)
-      alert(formatPaymentError(error))
-      setLoading(false)
+      
+      // 🔄 FALLBACK APPMAX: Se for erro de cartão de crédito, oferece tentar processador alternativo
+      const errorMsg = error.message || ''
+      const isCardError = paymentMethod === 'credit' && (
+        errorMsg.includes('recusado') ||
+        errorMsg.includes('rejected') ||
+        errorMsg.includes('declined') ||
+        errorMsg.includes('insufficient') ||
+        errorMsg.includes('card') ||
+        errorMsg.includes('cartão') ||
+        errorMsg.includes('token') ||
+        errorMsg.includes('cc_rejected') ||
+        errorMsg.includes('bad_request')
+      )
+      
+      if (isCardError) {
+        console.log('🔄 Oferecendo fallback AppMax...')
+        setMpErrorMessage(formatPaymentError(error))
+        setAppmaxCardData({
+          number: "",
+          holderName: "",
+          expiry: "",
+          cvv: "",
+          installments: cardData.installments || 1
+        })
+        setShowAppmaxFallback(true)
+        setLoading(false)
+      } else {
+        alert(formatPaymentError(error))
+        setLoading(false)
+      }
     }
+  }
+  
+  // 🔄 FALLBACK: Processar pagamento via AppMax
+  const handleAppmaxFallback = async () => {
+    setAppmaxLoading(true)
+    
+    try {
+      console.log('🔄 Processando pagamento via AppMax (fallback)...')
+      
+      // Validar dados do cartão
+      if (!appmaxCardData.number || !appmaxCardData.holderName || !appmaxCardData.expiry || !appmaxCardData.cvv) {
+        throw new Error('Por favor, preencha todos os dados do cartão')
+      }
+      
+      // Extrair mês e ano
+      const [expMonth, expYear] = appmaxCardData.expiry.split('/')
+      
+      // Mapeia os índices dos order bumps selecionados
+      const selectedBumpProducts = selectedOrderBumps.map(index => ({
+        product_id: orderBumps[index].id,
+        quantity: 1
+      }))
+      
+      const sessionId = localStorage.getItem('analytics_session_id') || `session_${Date.now()}`
+      
+      const payload = {
+        customer: {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          cpf: formData.cpf.replace(/\D/g, ''),
+          documentType: formData.documentType,
+        },
+        amount: total,
+        payment_method: 'credit_card',
+        orderBumps: selectedBumpProducts,
+        discount: cupomDiscount > 0 ? cupomDiscount : undefined,
+        coupon_code: appliedCupom || undefined,
+        session_id: sessionId,
+        // Força usar AppMax direto
+        force_gateway: 'appmax',
+        // Dados do cartão para AppMax
+        appmax_data: {
+          payment_method: 'credit_card',
+          card_data: {
+            number: appmaxCardData.number.replace(/\s/g, ''),
+            holder_name: appmaxCardData.holderName,
+            exp_month: expMonth,
+            exp_year: `20${expYear}`,
+            cvv: appmaxCardData.cvv,
+            installments: appmaxCardData.installments || 1,
+          },
+          order_bumps: selectedBumpProducts,
+        }
+      }
+      
+      const response = await fetch('/api/checkout/enterprise', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `appmax_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        },
+        body: JSON.stringify(payload)
+      })
+      
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao processar pagamento')
+      }
+      
+      if (result.success) {
+        await markCartAsRecovered(result.order_id)
+        window.location.href = `/obrigado?email=${encodeURIComponent(formData.email)}&order_id=${result.order_id}`
+      } else {
+        throw new Error(result.error || 'Pagamento recusado')
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Erro AppMax fallback:', error)
+      alert(`Erro no processador alternativo: ${error.message}`)
+    } finally {
+      setAppmaxLoading(false)
+    }
+  }
+  
+  // Formatar número do cartão
+  const formatCardNumberFallback = (value: string) => {
+    const v = value.replace(/\D/g, '').slice(0, 16)
+    const parts = []
+    for (let i = 0; i < v.length; i += 4) {
+      parts.push(v.slice(i, i + 4))
+    }
+    return parts.join(' ')
   }
 
   return (
@@ -2012,6 +2148,177 @@ export default function CheckoutPage() {
 
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 🔄 MODAL FALLBACK APPMAX - Retentativa com processador alternativo */}
+      <AnimatePresence>
+        {showAppmaxFallback && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowAppmaxFallback(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white p-5 rounded-t-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <CreditCard className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg">Processador Alternativo</h3>
+                    <p className="text-sm text-white/80">Tente novamente com outro processador</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Mensagem de erro original */}
+              <div className="p-5 border-b border-gray-100">
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-red-800 text-sm">Pagamento não aprovado</p>
+                      <p className="text-xs text-red-600 mt-1">{mpErrorMessage}</p>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 mt-3 text-center">
+                  Você pode tentar novamente usando nosso processador alternativo.
+                </p>
+              </div>
+              
+              {/* Formulário de cartão */}
+              <div className="p-5 space-y-4">
+                {/* Número do cartão */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                    Número do Cartão *
+                  </label>
+                  <input
+                    type="text"
+                    value={appmaxCardData.number}
+                    onChange={(e) => setAppmaxCardData({ ...appmaxCardData, number: formatCardNumberFallback(e.target.value) })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors"
+                    placeholder="0000 0000 0000 0000"
+                    maxLength={19}
+                  />
+                </div>
+                
+                {/* Nome no cartão */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                    Nome no Cartão *
+                  </label>
+                  <input
+                    type="text"
+                    value={appmaxCardData.holderName}
+                    onChange={(e) => setAppmaxCardData({ ...appmaxCardData, holderName: e.target.value.toUpperCase() })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors"
+                    placeholder="NOME COMO NO CARTÃO"
+                  />
+                </div>
+                
+                {/* Validade e CVV */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Validade *
+                    </label>
+                    <input
+                      type="text"
+                      value={appmaxCardData.expiry}
+                      onChange={(e) => {
+                        let value = e.target.value.replace(/\D/g, '').slice(0, 4)
+                        if (value.length >= 2) {
+                          value = value.slice(0, 2) + '/' + value.slice(2)
+                        }
+                        setAppmaxCardData({ ...appmaxCardData, expiry: value })
+                      }}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors"
+                      placeholder="MM/AA"
+                      maxLength={5}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      CVV *
+                    </label>
+                    <input
+                      type="text"
+                      value={appmaxCardData.cvv}
+                      onChange={(e) => setAppmaxCardData({ ...appmaxCardData, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors"
+                      placeholder="123"
+                      maxLength={4}
+                    />
+                  </div>
+                </div>
+                
+                {/* Parcelas */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                    Parcelas *
+                  </label>
+                  <select
+                    value={appmaxCardData.installments}
+                    onChange={(e) => setAppmaxCardData({ ...appmaxCardData, installments: parseInt(e.target.value) })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-500 focus:outline-none transition-colors bg-white"
+                  >
+                    {parcelasDisponiveis.map((parcela) => (
+                      <option key={parcela.numero} value={parcela.numero}>
+                        {parcela.numero}x de R$ {parcela.valorParcela.toFixed(2).replace('.', ',')}
+                        {parcela.numero === 1 ? ' sem juros' : ` (Total: R$ ${parcela.valorTotal.toFixed(2).replace('.', ',')})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              {/* Botões */}
+              <div className="p-5 border-t border-gray-100 space-y-3">
+                <button
+                  onClick={handleAppmaxFallback}
+                  disabled={appmaxLoading}
+                  className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                >
+                  {appmaxLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      Tentar Novamente
+                    </>
+                  )}
+                </button>
+                
+                <button
+                  onClick={() => setShowAppmaxFallback(false)}
+                  className="w-full py-3 text-gray-500 hover:text-gray-700 font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+                
+                {/* Badge de segurança */}
+                <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+                  <Lock className="w-3 h-3" />
+                  <span>Pagamento seguro e criptografado</span>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

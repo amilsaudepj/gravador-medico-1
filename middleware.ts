@@ -53,9 +53,9 @@ function setSecurityHeaders(response: NextResponse): NextResponse {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' blob: data: https:",
       "font-src 'self' data:",
-      "media-src 'self' data:", // ✅ ADICIONADO: Permite sons base64
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mercadopago.com https://api.mercadopago.com.br https://*.mercadolibre.com https://*.mercadopago.com https://api.appmax.com.br https://www.google-analytics.com", // ✅ ADICIONADO: wss://*.supabase.co
-      "frame-src 'self' https://challenges.cloudflare.com https://www.mercadolibre.com https://*.mercadolibre.com",
+      "media-src 'self' data:", // ✅ Permite sons base64
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mercadopago.com https://api.mercadopago.com.br https://*.mercadolibre.com https://*.mercadopago.com https://secure-fields.mercadopago.com https://api.appmax.com.br https://www.google-analytics.com",
+      "frame-src 'self' https://challenges.cloudflare.com https://www.mercadolibre.com https://*.mercadolibre.com https://*.mercadopago.com https://secure-fields.mercadopago.com", // ✅ Secure Fields MP
       "frame-ancestors 'none'",
       "upgrade-insecure-requests"
     ].join('; ')

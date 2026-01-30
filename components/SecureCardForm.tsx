@@ -368,7 +368,9 @@ const SecureCardForm = forwardRef<SecureCardFormHandle, SecureCardFormProps>(({
         {/* Documento - Hidden, preenchido automaticamente */}
         <input type="hidden" id="identificationType-container" value={documentType} />
         <input type="hidden" id="identificationNumber-container" value={cpf.replace(/\D/g, '')} />
-        <div id="issuer-container" className="hidden" />
+        <select id="issuer-container" className="hidden">
+          <option value="">Banco emissor</option>
+        </select>
       </form>
 
       {/* Badge de segurança */}

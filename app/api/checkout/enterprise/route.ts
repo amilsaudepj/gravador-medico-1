@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const { customer, amount, payment_method, mpToken, appmax_data, idempotencyKey, coupon_code, discount, device_id } = body
+    const { customer, amount, payment_method, mpToken, appmax_data, idempotencyKey, coupon_code, discount, device_id, force_gateway } = body
 
     // 🔥 VALIDAÇÃO DE CAMPOS OBRIGATÓRIOS DO CLIENTE
     if (!customer.name || !customer.email || !customer.phone || !customer.cpf) {
@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
       payment_method,
       has_mpToken: !!mpToken,
       has_appmax_data: !!appmax_data,
+      force_gateway: force_gateway || 'none',
       customer_email: customer.email,
       customer_phone: customer.phone,
       customer_cpf: customer.cpf,
@@ -202,19 +203,27 @@ export async function POST(request: NextRequest) {
     console.log(`✅ Pedido criado: ${order.id}`)
 
     // =====================================================
-    // 4️⃣ TENTATIVA 1: MERCADO PAGO
+    // 4️⃣ TENTATIVA 1: MERCADO PAGO (ou pular se force_gateway === 'appmax')
     // =====================================================
 
     // 🔥 FLAG: Só tenta AppMax se MP falhar de forma elegível
     let shouldTryAppmax = false
     let mpTriedAndFailed = false
 
-    console.log('🔍 Verificando condições para Mercado Pago...')
+    // 🔄 FALLBACK DIRETO: Se force_gateway === 'appmax', pula MP
+    if (force_gateway === 'appmax') {
+      console.log('� [FALLBACK] force_gateway=appmax - Pulando Mercado Pago, indo direto para AppMax')
+      shouldTryAppmax = true
+      mpTriedAndFailed = true
+    }
+
+    console.log('�🔍 Verificando condições para Mercado Pago...')
     console.log(`   payment_method: ${payment_method}`)
     console.log(`   mpToken exists: ${!!mpToken}`)
     console.log(`   mpToken value: ${mpToken ? mpToken.substring(0, 20) + '...' : 'NULL'}`)
+    console.log(`   force_gateway: ${force_gateway || 'none'}`)
 
-    if (payment_method === 'credit_card' && mpToken) {
+    if (payment_method === 'credit_card' && mpToken && force_gateway !== 'appmax') {
       const mpStartTime = Date.now()
       
       // Montar payload FORA do try para poder logar em caso de erro
