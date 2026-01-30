@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     console.log('🔄 [SYNC ALL] Iniciando sincronização completa...')
 
     // 1️⃣ Buscar todas as vendas aprovadas do AppMax
-    const appmaxApiKey = process.env.APPMAX_API_KEY
+    const appmaxApiKey = process.env.APPMAX_TOKEN || process.env.APPMAX_API_KEY
     const appmaxBaseUrl = process.env.APPMAX_BASE_URL || 'https://api.appmax.com.br/v1'
 
     if (!appmaxApiKey) {
