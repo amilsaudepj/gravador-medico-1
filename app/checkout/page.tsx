@@ -42,7 +42,7 @@ import {
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { mp, loading: mpLoading, createCardToken } = useMercadoPago()
+  const { mp, loading: mpLoading, createCardToken, getDeviceId } = useMercadoPago()
   
   // Estados principais
   const [currentStep, setCurrentStep] = useState(1) // 1: Dados, 2: Order Bumps, 3: Pagamento
@@ -767,6 +767,9 @@ export default function CheckoutPage() {
         utm_term: typeof window !== 'undefined' ? sessionStorage.getItem('utm_term') || undefined : undefined,
       }
 
+      // 🔒 Obter Device ID para análise antifraude (obrigatório MP)
+      const deviceId = getDeviceId()
+
       // Formato enterprise: customer object + amount
       const payload: any = {
         customer: {
@@ -784,6 +787,7 @@ export default function CheckoutPage() {
         coupon_code: appliedCupom || undefined,
         session_id: sessionId,
         utm_params: utmParams,
+        device_id: deviceId, // 🔒 Device ID para antifraude MP
       }
       
       // 🔐 TOKENIZAÇÃO SEGURA - Se for cartão, tokeniza com Mercado Pago

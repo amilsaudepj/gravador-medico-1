@@ -129,5 +129,18 @@ export function useMercadoPago() {
     validateCardNumber,
     validateCVV,
     getCardBrand,
+    /**
+     * Obtém o Device ID para análise antifraude
+     * @see https://www.mercadopago.com.br/developers/pt/docs/checkout-api/best-practices/device-id
+     */
+    getDeviceId: () => {
+      if (!mp) return null
+      try {
+        return mp.getDeviceId()
+      } catch (e) {
+        console.error('Erro ao obter DeviceId:', e)
+        return null
+      }
+    },
   }
 }

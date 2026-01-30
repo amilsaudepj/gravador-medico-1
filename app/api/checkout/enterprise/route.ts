@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const { customer, amount, payment_method, mpToken, appmax_data, idempotencyKey, coupon_code, discount } = body
+    const { customer, amount, payment_method, mpToken, appmax_data, idempotencyKey, coupon_code, discount, device_id } = body
 
     // 🔥 VALIDAÇÃO DE CAMPOS OBRIGATÓRIOS DO CLIENTE
     if (!customer.name || !customer.email || !customer.phone || !customer.cpf) {
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // 🔥 LOG DOS DADOS RECEBIDOS (INCLUINDO TELEFONE)
+    // 🔥 LOG DOS DADOS RECEBIDOS (INCLUINDO TELEFONE E DEVICE ID)
     console.log('📦 Dados recebidos no checkout:', JSON.stringify({
       amount,
       payment_method,
@@ -233,9 +233,11 @@ export async function POST(request: NextRequest) {
             number: customer.cpf.replace(/\D/g, '')
           }
         },
-        external_reference: order.id, // ✅ ADICIONADO: Referência para cruzar dados
+        external_reference: order.id, // ✅ Referência para cruzar dados
         notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
         statement_descriptor: 'GRAVADOR MEDICO',
+        // 🔒 Device ID para análise antifraude (obrigatório MP)
+        ...(device_id && { metadata: { device_id } }),
         additional_info: {
           items: [
             {
@@ -253,7 +255,8 @@ export async function POST(request: NextRequest) {
             first_name: customer.name?.split(' ')[0] || '',
             last_name: customer.name?.split(' ').slice(1).join(' ') || '',
             phone: {
-              number: customer.phone?.replace(/\D/g, '') || ''
+              area_code: customer.phone?.replace(/\D/g, '').substring(0, 2) || '',
+              number: customer.phone?.replace(/\D/g, '').substring(2) || ''
             }
           }
         }
@@ -545,6 +548,10 @@ export async function POST(request: NextRequest) {
             transaction_amount: amount,
             description: 'Gravador Médico - Acesso Vitalício',
             payment_method_id: 'pix',
+            external_reference: order.id, // ✅ Referência para cruzar dados
+            statement_descriptor: 'GRAVADOR MEDICO',
+            // 🔒 Device ID para análise antifraude
+            ...(device_id && { metadata: { device_id } }),
             payer: {
               email: customer.email,
               first_name: customer.name.split(' ')[0],
@@ -566,7 +573,15 @@ export async function POST(request: NextRequest) {
                   unit_price: Number(amount)
                 }
               ],
-              ip_address: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || '127.0.0.1'
+              ip_address: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || '127.0.0.1',
+              payer: {
+                first_name: customer.name?.split(' ')[0] || '',
+                last_name: customer.name?.split(' ').slice(1).join(' ') || '',
+                phone: {
+                  area_code: customer.phone?.replace(/\D/g, '').substring(0, 2) || '',
+                  number: customer.phone?.replace(/\D/g, '').substring(2) || ''
+                }
+              }
             },
             notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago-enterprise`
           })
