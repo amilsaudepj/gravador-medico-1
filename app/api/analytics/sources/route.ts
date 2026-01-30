@@ -1,9 +1,46 @@
-import { NextResponse } from 'next/server';
-import { getTrafficSources } from '@/lib/google-analytics';
+import { NextRequest, NextResponse } from 'next/server';
+import { analyticsDataClient, GA4_PROPERTY_ID } from '@/lib/google-analytics';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const data = await getTrafficSources();
+    if (!GA4_PROPERTY_ID) {
+      return NextResponse.json({ error: 'GA4_PROPERTY_ID não configurado' }, { status: 500 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const startParam = searchParams.get('start');
+    const endParam = searchParams.get('end');
+
+    const normalizeDate = (value: string) => {
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString().split('T')[0];
+    };
+
+    const since = startParam ? normalizeDate(startParam) : null;
+    const until = endParam ? normalizeDate(endParam) : null;
+
+    const dateRanges = since && until
+      ? [{ startDate: since, endDate: until }]
+      : [{ startDate: '7daysAgo', endDate: 'today' }];
+
+    const colors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#6366f1'];
+
+    const [response] = await analyticsDataClient.runReport({
+      property: `properties/${GA4_PROPERTY_ID}`,
+      dateRanges,
+      dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+      metrics: [{ name: 'activeUsers' }],
+      orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
+      limit: 6,
+    });
+
+    const data = response.rows?.map((row, index) => ({
+      source: row.dimensionValues?.[0]?.value || 'Desconhecido',
+      users: parseInt(row.metricValues?.[0]?.value || '0', 10),
+      color: colors[index % colors.length],
+    })) || [];
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('Erro ao buscar origem de tráfego:', error);

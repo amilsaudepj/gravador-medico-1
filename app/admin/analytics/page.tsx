@@ -52,6 +52,40 @@ const AnimatedNumber = ({ value }: { value: number }) => (
   </AnimatePresence>
 );
 
+// Opções de período
+const periodOptions = [
+  { value: 'today', label: 'Hoje', days: 0 },
+  { value: 'yesterday', label: 'Ontem', days: 1 },
+  { value: '7d', label: '7 dias', days: 7 },
+  { value: '14d', label: '14 dias', days: 14 },
+  { value: '30d', label: '30 dias', days: 30 },
+  { value: '90d', label: '90 dias', days: 90 },
+];
+
+// Helper para calcular datas do período
+function getDateRange(period: string): { start: Date; end: Date } {
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  
+  const option = periodOptions.find(p => p.value === period);
+  const days = option?.days ?? 7;
+  
+  if (period === 'today') {
+    // Hoje
+  } else if (period === 'yesterday') {
+    start.setDate(start.getDate() - 1);
+    end.setDate(end.getDate() - 1);
+  } else {
+    start.setDate(start.getDate() - (days - 1));
+  }
+  
+  return { start, end };
+}
+
 export default function AnalyticsPage() {
   const [traffic, setTraffic] = useState<TrafficData[]>([]);
   const [realtime, setRealtime] = useState<RealtimeData | null>(null);
@@ -66,24 +100,37 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [selectedPeriod, setSelectedPeriod] = useState('7d');
 
   const fetchData = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
     try {
+      const { start, end } = getDateRange(selectedPeriod);
+      const startStr = start.toISOString();
+      const endStr = end.toISOString();
+      const params = `start=${encodeURIComponent(startStr)}&end=${encodeURIComponent(endStr)}`;
+      
       const [trafficRes, realtimeRes, pagesRes, countriesRes, sourcesRes, kpisRes, citiesRes, agesRes, devicesRes, browsersRes] = await Promise.all([
-        fetch('/api/analytics/traffic'), fetch('/api/analytics/realtime'), fetch('/api/analytics/top-pages'),
-        fetch('/api/analytics/countries'), fetch('/api/analytics/sources'), fetch('/api/analytics/kpis'),
-        fetch('/api/analytics/cities'), fetch('/api/analytics/age'), fetch('/api/analytics/devices'), fetch('/api/analytics/browsers'),
+        fetch(`/api/analytics/traffic?${params}`), 
+        fetch('/api/analytics/realtime'), 
+        fetch(`/api/analytics/top-pages?${params}`),
+        fetch(`/api/analytics/countries?${params}`), 
+        fetch(`/api/analytics/sources?${params}`), 
+        fetch(`/api/analytics/kpis?${params}`),
+        fetch(`/api/analytics/cities?${params}`), 
+        fetch(`/api/analytics/age?${params}`), 
+        fetch(`/api/analytics/devices?${params}`), 
+        fetch(`/api/analytics/browsers?${params}`),
       ]);
       const [trafficData, realtimeData, pagesData, countriesData, sourcesData, kpisData, citiesData, agesData, devicesData, browsersData] = await Promise.all([
         trafficRes.json(), realtimeRes.json(), pagesRes.json(), countriesRes.json(), sourcesRes.json(), kpisRes.json(),
         citiesRes.json(), agesRes.json(), devicesRes.json(), browsersRes.json(),
       ]);
-      setTraffic(trafficData);
+      setTraffic(Array.isArray(trafficData) ? trafficData : []);
       setRealtime(realtimeData);
-      setTopPages(pagesData);
-      setCountries(countriesData.map((c: Country) => ({ ...c, flag: countryFlags[c.country] || '\u{1F30D}' })));
-      setSources(sourcesData);
+      setTopPages(Array.isArray(pagesData) ? pagesData : []);
+      setCountries((Array.isArray(countriesData) ? countriesData : []).map((c: Country) => ({ ...c, flag: countryFlags[c.country] || '\u{1F30D}' })));
+      setSources(Array.isArray(sourcesData) ? sourcesData : []);
       setKPIs(kpisData);
       setCities(Array.isArray(citiesData) ? citiesData : []);
       setAges(Array.isArray(agesData) ? agesData : []);
@@ -96,9 +143,13 @@ export default function AnalyticsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [selectedPeriod]);
 
-  useEffect(() => { fetchData(); const interval = setInterval(() => fetchData(), 60000); return () => clearInterval(interval); }, [fetchData]);
+  useEffect(() => { 
+    fetchData(); 
+    const interval = setInterval(() => fetchData(), 60000); 
+    return () => clearInterval(interval); 
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -126,7 +177,7 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="relative max-w-7xl mx-auto space-y-6">
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="relative">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 via-yellow-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30 transform hover:scale-105 transition-transform">
@@ -140,15 +191,35 @@ export default function AnalyticsPage() {
               <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">Analytics Dashboard</h1>
               <p className="text-sm text-gray-500 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                Google Analytics 4 - Atualizado {lastUpdate.toLocaleTimeString('pt-BR')}
+                Google Analytics 4 - {periodOptions.find(p => p.value === selectedPeriod)?.label}
               </p>
             </div>
           </div>
-          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => fetchData(true)} disabled={refreshing}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-medium shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Atualizando...' : 'Atualizar'}
-          </motion.button>
+          
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Filtro de Período */}
+            <div className="flex gap-1 p-1 bg-gray-800/50 rounded-xl border border-gray-700/50">
+              {periodOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setSelectedPeriod(option.value)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    selectedPeriod === option.value
+                      ? 'bg-purple-500 text-white shadow-lg'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => fetchData(true)} disabled={refreshing}
+              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-medium shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all disabled:opacity-50">
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Atualizando...' : 'Atualizar'}
+            </motion.button>
+          </div>
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">

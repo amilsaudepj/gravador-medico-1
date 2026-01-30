@@ -242,13 +242,25 @@ export default function AdsPage() {
 
   // Fetch data por nível
   const fetchLevelData = useCallback(async (level: InsightLevel, period: string) => {
-    const params = new URLSearchParams({ period, level });
-    if (level !== 'campaign') {
-      params.set('include_status', '1');
+    try {
+      const params = new URLSearchParams({ period, level });
+      if (level !== 'campaign') {
+        params.set('include_status', '1');
+      }
+      const res = await fetch(`/api/ads/insights?${params.toString()}`);
+      
+      if (!res.ok) {
+        console.error(`❌ [fetchLevelData] Erro HTTP ${res.status} para ${level}/${period}`);
+        return [];
+      }
+      
+      const data = await res.json();
+      console.log(`✅ [fetchLevelData] ${level}/${period}:`, data.length, 'resultados');
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error(`❌ [fetchLevelData] Erro ao buscar ${level}/${period}:`, error);
+      return [];
     }
-    const res = await fetch(`/api/ads/insights?${params.toString()}`);
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
   }, []);
 
   // Buscar vendas reais do Supabase para o período
@@ -293,64 +305,45 @@ export default function AdsPage() {
     }
   }, []);
 
-  // Buscar gastos de hoje e do mês (sempre, independente do período selecionado)
-  const fetchSpendSummary = useCallback(async () => {
+  // Função de refresh (usada pelo botão e pelo intervalo)
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    console.log('🔄 [handleRefresh] Atualizando dados para período:', selectedPeriod);
     try {
-      // Buscar gasto de hoje
-      const todayData = await fetchLevelData('campaign', 'today');
-      const todaySpend = todayData.reduce((sum: number, c: CampaignInsight) => sum + Number(c.spend || 0), 0);
-      setSpendToday(todaySpend);
-      
-      // Buscar gasto do mês
-      const monthData = await fetchLevelData('campaign', 'this_month');
-      const monthSpend = monthData.reduce((sum: number, c: CampaignInsight) => sum + Number(c.spend || 0), 0);
-      setSpendMonth(monthSpend);
-    } catch (error) {
-      console.error('Erro ao buscar resumo de gastos:', error);
-    }
-  }, [fetchLevelData]);
-
-  const fetchData = useCallback(async (showRefresh = false, period = selectedPeriod) => {
-    if (showRefresh) setRefreshing(true);
-    try {
-      // Buscar campanhas do Facebook, vendas reais e resumo de gastos em paralelo
-      const [campaigns] = await Promise.all([
-        fetchLevelData('campaign', period),
-        fetchRealSales(period),
-        fetchSpendSummary()
+      // Buscar todos os dados em paralelo
+      const [periodData, todayData, monthData] = await Promise.all([
+        fetchLevelData('campaign', selectedPeriod),
+        fetchLevelData('campaign', 'today'),
+        fetchLevelData('campaign', 'this_month')
       ]);
       
-      setAllCampaigns(campaigns);
-      const calculatedMetrics = calculateAdsMetrics(campaigns);
+      // Atualizar campanhas do período selecionado
+      setAllCampaigns(periodData);
+      const calculatedMetrics = calculateAdsMetrics(periodData);
       setMetrics(calculatedMetrics);
+      
+      // Atualizar gastos de tempo real
+      const todaySpend = todayData.reduce((sum: number, c: CampaignInsight) => sum + Number(c.spend || 0), 0);
+      const monthSpend = monthData.reduce((sum: number, c: CampaignInsight) => sum + Number(c.spend || 0), 0);
+      
+      console.log('📊 [handleRefresh] Gasto hoje:', todaySpend, '| Gasto mês:', monthSpend);
+      setSpendToday(todaySpend);
+      setSpendMonth(monthSpend);
+      
+      // Buscar vendas reais
+      await fetchRealSales(selectedPeriod);
+      
+      // Limpar dados de níveis secundários para forçar recarregamento
+      setAdsets([]);
+      setAds([]);
+      
       setLastUpdate(new Date());
     } catch (error) {
-      console.error('Erro ao carregar dados de anúncios:', error);
-      setAllCampaigns([]);
-      setMetrics({
-        totalSpend: 0,
-        totalClicks: 0,
-        totalImpressions: 0,
-        totalReach: 0,
-        avgCpc: 0,
-        avgCtr: 0,
-        totalVideoViews: 0,
-        totalOutboundClicks: 0,
-        totalPurchases: 0,
-        totalPurchaseValue: 0,
-        totalLeads: 0,
-        totalCheckoutComplete: 0,
-        cpl: 0,
-        costPerCheckout: 0,
-        roas: 0,
-        cpa: 0,
-        campaigns: []
-      });
+      console.error('❌ [handleRefresh] Erro:', error);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedPeriod, fetchLevelData, fetchRealSales, fetchSpendSummary]);
+  }, [selectedPeriod, fetchLevelData, fetchRealSales]);
 
   // Carregar adsets quando tab mudar
   const fetchAdsets = useCallback(async () => {
@@ -393,17 +386,55 @@ export default function AdsPage() {
   }, [fetchAdsets, fetchAds]);
 
   useEffect(() => {
-    fetchData(false, selectedPeriod);
+    console.log('🔄 [useEffect] Iniciando fetch para período:', selectedPeriod);
+    
+    // Função assíncrona para carregar todos os dados
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        // Buscar dados do período selecionado e dados de tempo real em paralelo
+        const [periodData, todayData, monthData] = await Promise.all([
+          fetchLevelData('campaign', selectedPeriod),
+          fetchLevelData('campaign', 'today'),
+          fetchLevelData('campaign', 'this_month')
+        ]);
+        
+        // Atualizar campanhas do período selecionado
+        setAllCampaigns(periodData);
+        const calculatedMetrics = calculateAdsMetrics(periodData);
+        setMetrics(calculatedMetrics);
+        
+        // Atualizar gastos de tempo real (hoje e mês)
+        const todaySpend = todayData.reduce((sum: number, c: CampaignInsight) => sum + Number(c.spend || 0), 0);
+        const monthSpend = monthData.reduce((sum: number, c: CampaignInsight) => sum + Number(c.spend || 0), 0);
+        
+        console.log('📊 [loadData] Gasto hoje:', todaySpend, '| Gasto mês:', monthSpend);
+        setSpendToday(todaySpend);
+        setSpendMonth(monthSpend);
+        
+        // Buscar vendas reais (se autenticado)
+        await fetchRealSales(selectedPeriod);
+        
+        setLastUpdate(new Date());
+      } catch (error) {
+        console.error('❌ [loadData] Erro:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadData();
+    
     // Limpar dados de níveis secundários quando período muda
     setAdsets([]);
     setAds([]);
-  }, [selectedPeriod]);
+  }, [selectedPeriod, fetchLevelData, fetchRealSales]);
 
   useEffect(() => {
     // Atualizar a cada 5 minutos
-    const interval = setInterval(() => fetchData(), 300000);
+    const interval = setInterval(() => handleRefresh(), 300000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [handleRefresh]);
 
   // Filtrar campanhas (para métricas e lista)
   const filteredCampaigns = useMemo(() => {
@@ -844,7 +875,7 @@ export default function AdsPage() {
             Atualizado: {lastUpdate.toLocaleTimeString('pt-BR')}
           </span>
           <button
-            onClick={() => fetchData(true)}
+            onClick={() => handleRefresh()}
             disabled={refreshing}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all disabled:opacity-50"
           >
