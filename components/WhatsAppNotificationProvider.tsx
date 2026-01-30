@@ -22,6 +22,7 @@ export function WhatsAppNotificationProvider({ children }: { children: React.Rea
   const { addNotification } = useNotifications()
 
   useEffect(() => {
+    let isSubscribed = true
     console.log('🔌 [WhatsApp Global] Conectando ao Supabase Realtime...')
 
     const channel = supabase
@@ -34,6 +35,8 @@ export function WhatsAppNotificationProvider({ children }: { children: React.Rea
           table: 'whatsapp_messages'
         },
         async (payload: any) => {
+          if (!isSubscribed) return
+          
           console.log('📩 [WhatsApp Global] Nova mensagem recebida:', payload.new)
 
           const newMessage = payload.new as WhatsAppMessage
@@ -108,10 +111,11 @@ export function WhatsAppNotificationProvider({ children }: { children: React.Rea
 
     // Cleanup: Remover canal ao desmontar componente
     return () => {
+      isSubscribed = false
       console.log('🔌 [WhatsApp Global] Desconectando do Supabase Realtime...')
       supabase.removeChannel(channel)
     }
-  }, [whatsappNotifications, addNotification])
+  }, []) // Remover dependências para evitar reconexões
 
   return <>{children}</>
 }

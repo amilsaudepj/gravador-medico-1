@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     // 1️⃣ BUSCAR DADOS DO CLIENTE
     let query = supabaseAdmin
       .from('sales')
-      .select('id, customer_email, customer_name, total_amount, lovable_user_id, lovable_password')
+      .select('id, customer_email, customer_name, total_amount')
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -74,18 +74,28 @@ export async function POST(request: NextRequest) {
     console.log('✅ Cliente encontrado:', {
       id: sale.id,
       email: sale.customer_email,
-      name: sale.customer_name,
-      hasLovableUser: !!sale.lovable_user_id
+      name: sale.customer_name
     })
 
-    // 2️⃣ VERIFICAR SE TEM CREDENCIAIS LOVABLE
-    if (!sale.lovable_user_id || !sale.lovable_password) {
+    // 2️⃣ BUSCAR CREDENCIAIS LOVABLE (da tabela provisioning_queue ou customers)
+    const { data: queueData } = await supabaseAdmin
+      .from('provisioning_queue')
+      .select('lovable_user_id, lovable_password')
+      .eq('sale_id', sale.id)
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (!queueData?.lovable_user_id || !queueData?.lovable_password) {
       console.log('⚠️ Cliente não tem credenciais Lovable registradas')
       return NextResponse.json({
         success: false,
         error: 'Cliente não possui credenciais registradas. Execute "Resincronizar Venda" primeiro.'
       }, { status: 400 })
     }
+
+    const lovablePassword = queueData.lovable_password
 
     // 3️⃣ CONSTRUIR HTML DO EMAIL
     const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.gravadormedico.com.br'}/login`
@@ -144,7 +154,7 @@ export async function POST(request: NextRequest) {
                         <td style="padding: 16px 0 8px 0;">
                           <p style="margin: 0; color: #6b7280; font-size: 13px;">Senha:</p>
                           <p style="margin: 4px 0 0 0; color: #111827; font-size: 16px; font-weight: 600; font-family: 'Courier New', monospace;">
-                            ${sale.lovable_password}
+                            ${lovablePassword}
                           </p>
                         </td>
                       </tr>
