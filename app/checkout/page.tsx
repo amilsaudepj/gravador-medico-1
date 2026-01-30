@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { useMercadoPago } from '@/hooks/useMercadoPago'
 import { validateCPF, formatCPF } from '@/lib/cpf'
 import { validateCNPJ, formatCNPJ, consultarCNPJ } from '@/lib/cnpj-api'
+import { useAutoSave } from '@/hooks/useAutoSave'
 import {
   Check,
   Clock,
@@ -105,6 +106,34 @@ export default function CheckoutPage() {
     [Autoplay({ delay: 3000, stopOnInteraction: false })]
   )
 
+  // Cálculos de preço (precisam vir antes do auto-save)
+  const basePrice = 36
+  const orderBumpsTotal = selectedOrderBumps.reduce((acc, idx) => acc + orderBumps[idx].price, 0)
+  const subtotal = basePrice + orderBumpsTotal
+  const total = subtotal - cupomDiscount
+
+  // 🔥 AUTO-SAVE: Salva dados enquanto usuário digita (Shadow Save)
+  const autoSaveData = {
+    customer_name: formData.name,
+    customer_email: formData.email,
+    customer_phone: formData.phone,
+    customer_cpf: formData.cpf,
+    cart_total: total,
+    payment_method: paymentMethod,
+    // Não salvar dados de cartão (PCI DSS)
+  }
+
+  const { loadDraft, clearDraft, sessionId } = useAutoSave(autoSaveData, {
+    enabled: currentStep <= 2, // Só salva nas etapas 1 e 2
+    debounceMs: 1000, // 1 segundo após parar de digitar
+    onSaveSuccess: () => {
+      console.log('💾 [Checkout] Dados salvos automaticamente')
+    },
+    onSaveError: (error) => {
+      console.error('❌ [Checkout] Erro no auto-save:', error)
+    }
+  })
+
   // 🔥 NÍVEL 1: Auto-fill com dados do Supabase (se usuário logado)
   useEffect(() => {
     const loadUserData = async () => {
@@ -144,6 +173,41 @@ export default function CheckoutPage() {
     loadUserData()
   }, [])
 
+  // 🔥 NÍVEL 2: Recuperar draft salvo (Shadow Save Recovery)
+  useEffect(() => {
+    const recoverDraft = async () => {
+      try {
+        const savedDraft = await loadDraft()
+        
+        if (savedDraft) {
+          console.log('📋 [Checkout] Draft encontrado! Recuperando dados...')
+          
+          // Preenche apenas campos que ainda estão vazios
+          setFormData(prev => ({
+            name: prev.name || savedDraft.customer_name || '',
+            email: prev.email || savedDraft.customer_email || '',
+            phone: prev.phone || savedDraft.customer_phone || '',
+            cpf: prev.cpf || savedDraft.customer_cpf || '',
+            documentType: prev.documentType,
+            companyName: prev.companyName
+          }))
+
+          if (savedDraft.payment_method) {
+            setPaymentMethod(savedDraft.payment_method as "credit" | "pix")
+          }
+
+          console.log('✅ [Checkout] Dados recuperados do auto-save!')
+        }
+      } catch (error) {
+        console.error('❌ [Checkout] Erro ao recuperar draft:', error)
+      }
+    }
+
+    // Aguarda um pouco para não conflitar com o carregamento do usuário
+    const timer = setTimeout(recoverDraft, 500)
+    return () => clearTimeout(timer)
+  }, [loadDraft])
+
   // Countdown timer
   useEffect(() => {
     const timer = setInterval(() => {
@@ -175,6 +239,9 @@ export default function CheckoutPage() {
           const record = payload.new || payload.old
           if (record && (record.status === 'approved' || record.status === 'paid')) {
             console.log('✅ Pagamento APROVADO via Realtime! Redirecionando...')
+            
+            // 🗑️ Limpar draft (checkout concluído com sucesso)
+            clearDraft().catch(err => console.error('❌ Erro ao limpar draft:', err))
             
             // Redireciona para página de obrigado
             router.push(`/obrigado?email=${encodeURIComponent(formData.email)}&order_id=${pixData.orderId}`)
@@ -208,6 +275,9 @@ export default function CheckoutPage() {
           
           // 🎯 Remover carrinho abandonado ao confirmar pagamento
           await markCartAsRecovered(pixData.orderId)
+          
+          // 🗑️ Limpar draft (checkout concluído com sucesso)
+          clearDraft().catch(err => console.error('❌ Erro ao limpar draft:', err))
           
           // Redireciona para página de obrigado
           router.push(`/obrigado?email=${encodeURIComponent(formData.email)}&order_id=${pixData.orderId}`)
@@ -341,13 +411,6 @@ export default function CheckoutPage() {
     },
   ]
 
-  // Cálculos
-  const basePrice = 36
-  const orderBumpsTotal = selectedOrderBumps.reduce((acc, idx) => acc + orderBumps[idx].price, 0)
-  const subtotal = basePrice + orderBumpsTotal
-  // cupomDiscount agora vem do state, calculado quando o cupom é aplicado
-  const total = subtotal - cupomDiscount // Aplica desconto do cupom
-  
   // Calcula parcelas com JUROS SIMPLES - Lógica Appmax
   // Taxa: 2.49% ao mês (0.0249)
   // 1x: SEM JUROS (valor original)
