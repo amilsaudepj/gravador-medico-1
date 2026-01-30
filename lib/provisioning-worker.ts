@@ -2,59 +2,377 @@ import { supabaseAdmin } from './supabase'
 import { createLovableUser, generateSecurePassword } from '@/services/lovable-integration'
 
 /**
- * 🏭 PROVISIONING WORKER
+ * 🏭 PROVISIONING WORKER V2 - MODULAR & FAULT-TOLERANT
  * 
- * Processa fila de provisionamento (criação de usuários + envio de email)
+ * ✅ REFATORADO: Máquina de estados com etapas independentes
  * 
- * Features:
- * - ✅ Processa fila provisioning_queue
- * - ✅ Atualiza máquina de estados: paid → provisioning → active
- * - ✅ Retry automático (até 3 tentativas)
- * - ✅ Logs detalhados em integration_logs
- * - ✅ Marca provisioning_failed se esgotar tentativas
+ * Arquitetura:
+ * - Cada etapa é independente e pode falhar sem afetar as anteriores
+ * - Se o Lovable cair, o cliente já recebeu email de confirmação (enviado pelo webhook)
+ * - Cada etapa pode ser retentada individualmente
+ * 
+ * STAGES (Máquina de Estados):
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  queued → creating_user → sending_credentials → completed  │
+ * │     ↓           ↓                  ↓                       │
+ * │     └─────→ failed_at_user   failed_at_email → retry       │
+ * └─────────────────────────────────────────────────────────────┘
  */
 
 interface ProvisioningResult {
   success: boolean
   processed: number
   failed: number
+  stages?: {
+    users_created: number
+    emails_sent: number
+  }
   errors: Array<{
     sale_id: string
+    stage?: string
     error: string
   }>
 }
 
+// =====================================================
+// 🎯 PASSO A: LER ITENS DA FILA
+// =====================================================
+async function fetchQueueItems(limit: number = 10) {
+  // Buscar por stage (novo) ou status (legado)
+  const { data: items, error } = await supabaseAdmin
+    .from('provisioning_queue')
+    .select('*')
+    .or('stage.in.(queued,creating_user,sending_credentials,failed_at_user,failed_at_email),status.in.(pending,processing,failed)')
+    .or('next_retry_at.is.null,next_retry_at.lte.now()')
+    .order('created_at', { ascending: true })
+    .limit(limit)
+
+  if (error) throw error
+  
+  // Filtrar apenas itens que realmente precisam processamento
+  return (items || []).filter(item => {
+    const stage = item.stage || 'queued'
+    const status = item.status
+    
+    // Excluir completed e failed_permanent
+    if (stage === 'completed' || stage === 'failed_permanent') return false
+    if (status === 'completed') return false
+    
+    return true
+  })
+}
+
+// =====================================================
+// 🎯 PASSO B: CRIAR USUÁRIO NO LOVABLE
+// =====================================================
+async function executeUserCreation(item: any, order: any): Promise<{
+  success: boolean
+  userId?: string
+  password?: string
+  error?: string
+  alreadyExists?: boolean
+}> {
+  const startTime = Date.now()
+  
+  try {
+    console.log(`[${item.id}] 👤 STAGE: creating_user`)
+    
+    // Atualizar stage para creating_user
+    await supabaseAdmin
+      .from('provisioning_queue')
+      .update({ 
+        stage: 'creating_user',
+        status: 'processing',
+        started_at: new Date().toISOString()
+      })
+      .eq('id', item.id)
+    
+    // Gerar senha segura
+    const password = generateSecurePassword()
+    
+    // Criar usuário no Lovable
+    const result = await createLovableUser({
+      email: order.customer_email,
+      password: password,
+      full_name: order.customer_name
+    })
+    
+    if (!result.success && !result.alreadyExists) {
+      throw new Error(result.error || 'Falha ao criar usuário no Lovable')
+    }
+    
+    const userId = result.user?.id || 'existing'
+    
+    // ✅ SUCESSO: Salvar credenciais e avançar stage
+    await supabaseAdmin
+      .from('provisioning_queue')
+      .update({
+        stage: 'sending_credentials',
+        lovable_user_id: userId,
+        lovable_password: password,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', item.id)
+    
+    // Atualizar status do pedido
+    await supabaseAdmin
+      .from('sales')
+      .update({ order_status: 'provisioning' })
+      .eq('id', order.id)
+    
+    // Log de sucesso
+    await supabaseAdmin.from('integration_logs').insert({
+      order_id: order.id,
+      action: 'create_user_lovable',
+      status: 'success',
+      recipient_email: order.customer_email,
+      user_id: userId,
+      details: {
+        stage: 'creating_user',
+        already_exists: result.alreadyExists,
+        duration_ms: Date.now() - startTime
+      },
+      duration_ms: Date.now() - startTime
+    })
+    
+    console.log(`[${item.id}] ✅ Usuário criado: ${userId}`)
+    
+    return {
+      success: true,
+      userId,
+      password,
+      alreadyExists: result.alreadyExists
+    }
+    
+  } catch (error: any) {
+    console.error(`[${item.id}] ❌ Falha ao criar usuário:`, error.message)
+    
+    // Marcar como falha na criação de usuário
+    const newRetryCount = (item.retry_count || 0) + 1
+    const maxRetries = item.max_retries ?? 3
+    const delayMinutes = Math.pow(2, newRetryCount) * 5 // 5min, 10min, 20min
+    const nextRetryAt = newRetryCount < maxRetries 
+      ? new Date(Date.now() + delayMinutes * 60 * 1000).toISOString()
+      : null
+    
+    await supabaseAdmin
+      .from('provisioning_queue')
+      .update({
+        stage: newRetryCount >= maxRetries ? 'failed_permanent' : 'failed_at_user',
+        status: 'failed',
+        last_error: error.message,
+        retry_count: newRetryCount,
+        next_retry_at: nextRetryAt,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', item.id)
+    
+    // Log de erro
+    await supabaseAdmin.from('integration_logs').insert({
+      order_id: order.id,
+      action: 'create_user_lovable',
+      status: 'error',
+      recipient_email: order.customer_email,
+      error_message: error.message,
+      details: {
+        stage: 'creating_user',
+        retry_count: newRetryCount,
+        max_retries: maxRetries,
+        next_retry_at: nextRetryAt,
+        duration_ms: Date.now() - startTime
+      },
+      duration_ms: Date.now() - startTime
+    })
+    
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+}
+
+// =====================================================
+// 🎯 PASSO C: ENVIAR EMAIL COM CREDENCIAIS
+// =====================================================
+async function executeSendCredentials(item: any, order: any): Promise<{
+  success: boolean
+  emailId?: string
+  error?: string
+}> {
+  const startTime = Date.now()
+  
+  try {
+    console.log(`[${item.id}] 📧 STAGE: sending_credentials`)
+    
+    // Recuperar senha da fila
+    const password = item.lovable_password
+    
+    if (!password) {
+      throw new Error('Senha não encontrada na fila - reprocessar criação de usuário')
+    }
+    
+    // Verificar idempotência: email já foi enviado?
+    const { data: existingEmail } = await supabaseAdmin
+      .from('integration_logs')
+      .select('id, created_at')
+      .eq('order_id', order.id)
+      .eq('action', 'send_email')
+      .eq('status', 'success')
+      .maybeSingle()
+    
+    if (existingEmail) {
+      console.log(`[${item.id}] ⏭️ Email já enviado anteriormente, pulando...`)
+      
+      // Marcar como completed mesmo assim
+      await supabaseAdmin
+        .from('provisioning_queue')
+        .update({
+          stage: 'completed',
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', item.id)
+      
+      await supabaseAdmin
+        .from('sales')
+        .update({ order_status: 'active' })
+        .eq('id', order.id)
+      
+      return { success: true }
+    }
+    
+    // Importar função de email
+    const { sendWelcomeEmail } = await import('./email')
+    
+    // Enviar email
+    const emailResult = await sendWelcomeEmail({
+      to: order.customer_email,
+      customerName: order.customer_name,
+      userEmail: order.customer_email,
+      userPassword: password,
+      orderId: order.id.toString(),
+      orderValue: Number(order.total_amount ?? order.amount ?? 0),
+      paymentMethod: order.payment_gateway === 'mercadopago'
+        ? 'Mercado Pago'
+        : order.payment_gateway === 'appmax'
+          ? 'AppMax'
+          : (order.payment_gateway || order.payment_method || 'checkout')
+    })
+    
+    if (!emailResult.success) {
+      throw new Error(emailResult.error || 'Falha ao enviar email')
+    }
+    
+    // ✅ SUCESSO TOTAL: Marcar como completed
+    await supabaseAdmin
+      .from('provisioning_queue')
+      .update({
+        stage: 'completed',
+        status: 'completed',
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', item.id)
+    
+    // Atualizar status do pedido para active
+    await supabaseAdmin
+      .from('sales')
+      .update({ order_status: 'active' })
+      .eq('id', order.id)
+    
+    // Log de sucesso
+    await supabaseAdmin.from('integration_logs').insert({
+      order_id: order.id,
+      action: 'send_email',
+      status: 'success',
+      recipient_email: order.customer_email,
+      details: {
+        stage: 'sending_credentials',
+        email_id: emailResult.emailId,
+        duration_ms: Date.now() - startTime
+      },
+      duration_ms: Date.now() - startTime
+    })
+    
+    console.log(`[${item.id}] ✅ Email enviado: ${emailResult.emailId}`)
+    
+    return {
+      success: true,
+      emailId: emailResult.emailId
+    }
+    
+  } catch (error: any) {
+    console.error(`[${item.id}] ❌ Falha ao enviar email:`, error.message)
+    
+    // Marcar como falha no envio de email
+    const newRetryCount = (item.retry_count || 0) + 1
+    const maxRetries = item.max_retries ?? 3
+    const delayMinutes = Math.pow(2, newRetryCount) * 5
+    const nextRetryAt = newRetryCount < maxRetries 
+      ? new Date(Date.now() + delayMinutes * 60 * 1000).toISOString()
+      : null
+    
+    await supabaseAdmin
+      .from('provisioning_queue')
+      .update({
+        stage: newRetryCount >= maxRetries ? 'failed_permanent' : 'failed_at_email',
+        status: 'failed',
+        last_error: error.message,
+        retry_count: newRetryCount,
+        next_retry_at: nextRetryAt,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', item.id)
+    
+    // Log de erro
+    await supabaseAdmin.from('integration_logs').insert({
+      order_id: order.id,
+      action: 'send_email',
+      status: 'error',
+      recipient_email: order.customer_email,
+      error_message: error.message,
+      details: {
+        stage: 'sending_credentials',
+        retry_count: newRetryCount,
+        max_retries: maxRetries,
+        next_retry_at: nextRetryAt,
+        duration_ms: Date.now() - startTime
+      },
+      duration_ms: Date.now() - startTime
+    })
+    
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+}
+
+// =====================================================
+// 🏭 FUNÇÃO PRINCIPAL: PROCESSAR FILA
+// =====================================================
 export async function processProvisioningQueue(): Promise<ProvisioningResult> {
   const startTime = Date.now()
   
-  console.log('🏭 [PROVISIONING] Iniciando processamento da fila...')
+  console.log('🏭 [PROVISIONING V2] Iniciando processamento modular...')
 
   const result: ProvisioningResult = {
     success: true,
     processed: 0,
     failed: 0,
+    stages: {
+      users_created: 0,
+      emails_sent: 0
+    },
     errors: []
   }
 
   try {
     // =====================================================
-    // 1️⃣ BUSCAR ITENS PENDENTES NA FILA
+    // 1️⃣ PASSO A: LER ITENS DA FILA
     // =====================================================
+    const queueItems = await fetchQueueItems(10)
     
-    const { data: queueItems, error: queueError} = await supabaseAdmin
-      .from('provisioning_queue')
-      .select('*')
-      .in('status', ['pending', 'failed'])
-      .or('next_retry_at.is.null,next_retry_at.lte.now()') // Sem retry agendado ou já passou a hora
-      .order('created_at', { ascending: true })
-      .limit(10) // Processar no máximo 10 por vez
-
-    if (queueError) {
-      console.error('❌ Erro ao buscar fila:', queueError)
-      throw queueError
-    }
-
-    if (!queueItems || queueItems.length === 0) {
+    if (queueItems.length === 0) {
       console.log('ℹ️ Nenhum item na fila para processar')
       return result
     }
@@ -62,369 +380,191 @@ export async function processProvisioningQueue(): Promise<ProvisioningResult> {
     console.log(`📋 Encontrados ${queueItems.length} itens para processar`)
 
     // =====================================================
-    // 2️⃣ PROCESSAR CADA ITEM
+    // 2️⃣ PROCESSAR CADA ITEM POR ETAPA
     // =====================================================
-    
     for (const item of queueItems) {
-      const itemStartTime = Date.now()
+      const saleId = item.sale_id || item.order_id
       
-      try {
-        const saleId = item.sale_id || item.order_id
+      if (!saleId) {
+        console.warn(`⚠️ Item ${item.id} sem sale_id, pulando...`)
+        continue
+      }
 
-        if (!saleId) {
-          throw new Error('Fila sem sale_id (registro inválido)')
-        }
-
-        console.log(`\n🔄 Processando pedido: ${saleId}`)
-
-        // Buscar dados do pedido - primeiro tenta em sales, depois em orders
-        let order = null
-        let orderTable = 'sales'
+      // Verificar máximo de retries
+      const maxRetries = item.max_retries ?? 3
+      if ((item.retry_count ?? 0) >= maxRetries) {
+        console.log(`⚠️ Item ${item.id} atingiu máximo de retries (${maxRetries}), marcando como falha permanente`)
         
-        // Tentar buscar na tabela sales primeiro
-        const { data: salesOrder, error: salesError } = await supabaseAdmin
-          .from('sales')
-          .select('*')
-          .eq('id', saleId)
-          .maybeSingle()
-
-        if (salesOrder) {
-          order = salesOrder
-          orderTable = 'sales'
-        } else {
-          // Tentar buscar na tabela orders
-          const { data: ordersOrder, error: ordersError } = await supabaseAdmin
-            .from('orders')
-            .select('*')
-            .eq('id', saleId)
-            .maybeSingle()
-
-          if (ordersOrder) {
-            order = ordersOrder
-            orderTable = 'orders'
-          }
-        }
-
-        if (!order) {
-          throw new Error(`Pedido não encontrado em sales nem orders: ${saleId}`)
-        }
-
-        console.log(`📋 Pedido encontrado na tabela: ${orderTable}`)
-
-        const maxRetries = item.max_retries ?? 3
-        if ((item.retry_count ?? 0) >= maxRetries) {
-          console.log(`⚠️ Pedido ${saleId} atingiu o máximo de retries (${maxRetries}), pulando...`)
-          continue
-        }
-
-        // Validar que pedido está pago - checar ambos os campos possíveis
-        const orderStatus = order.order_status || order.status
-        if (orderStatus !== 'paid' && orderStatus !== 'approved') {
-          console.log(`⚠️ Pedido não está pago (status: ${orderStatus}), pulando...`)
-          continue
-        }
-
-        // =====================================================
-        // 3️⃣ ATUALIZAR STATUS: paid → provisioning
-        // =====================================================
-        
-        // Atualizar na tabela correta
-        if (orderTable === 'sales') {
-          await supabaseAdmin
-            .from('sales')
-            .update({ order_status: 'provisioning' })
-            .eq('id', order.id)
-        } else {
-          await supabaseAdmin
-            .from('orders')
-            .update({ status: 'provisioning' })
-            .eq('id', order.id)
-        }
-
-        await supabaseAdmin
-          .from('provisioning_queue')
-          .update({ status: 'processing' })
-          .eq('id', item.id)
-
-        console.log('📝 Status atualizado: paid → provisioning')
-
-        // =====================================================
-        // 4️⃣ CRIAR USUÁRIO NO LOVABLE
-        // =====================================================
-        
-        console.log('👤 Criando usuário no Lovable...')
-        
-        const password = generateSecurePassword()
-        
-        const userResult = await createLovableUser({
-          email: order.customer_email,
-          password: password,
-          full_name: order.customer_name
-        })
-
-        if (!userResult.success) {
-          throw new Error(`Falha ao criar usuário: ${userResult.error}`)
-        }
-
-        console.log('✅ Usuário criado no Lovable:', userResult.user?.id)
-
-        // Log de sucesso
-        await supabaseAdmin.from('integration_logs').insert({
-          order_id: order.id,
-          action: 'create_user_lovable',
-          status: 'success',
-          recipient_email: order.customer_email,
-          user_id: userResult.user?.id,
-          details: {
-            password: password, // ⚠️ Armazenar temporariamente para email
-            user: userResult.user
-          },
-          duration_ms: Date.now() - itemStartTime
-        })
-
-        // =====================================================
-        // 5️⃣ ENVIAR EMAIL COM CREDENCIAIS (COM PROTEÇÃO DE IDEMPOTÊNCIA)
-        // =====================================================
-        
-        console.log('📧 Verificando se email já foi enviado anteriormente...')
-        
-        // ✅ IDEMPOTÊNCIA: Verificar se já existe email enviado com sucesso
-        const { data: existingEmailLog, error: logCheckError } = await supabaseAdmin
-          .from('integration_logs')
-          .select('id, created_at')
-          .eq('order_id', order.id)
-          .eq('action', 'send_email')
-          .eq('status', 'success')
-          .maybeSingle()
-
-        if (logCheckError) {
-          console.warn('⚠️ Erro ao verificar logs de email:', logCheckError)
-        }
-
-        if (existingEmailLog) {
-          console.log(`✅ Email já foi enviado anteriormente em ${existingEmailLog.created_at}`)
-          console.log('⏭️ Pulando envio de email (evitando duplicata)')
-          
-          // Log de skip (para auditoria)
-          await supabaseAdmin.from('integration_logs').insert({
-            order_id: order.id,
-            action: 'send_email',
-            status: 'skipped',
-            recipient_email: order.customer_email,
-            details: {
-              reason: 'email_already_sent',
-              previous_email_sent_at: existingEmailLog.created_at,
-              skipped_at: new Date().toISOString()
-            },
-            duration_ms: 0
-          })
-        } else {
-          // Email ainda não foi enviado, proceder com envio
-          console.log('📧 Enviando email de boas-vindas...')
-          
-          const { sendWelcomeEmail } = await import('./email')
-          
-          const emailResult = await sendWelcomeEmail({
-            to: order.customer_email,
-            customerName: order.customer_name,
-            userEmail: order.customer_email,
-            userPassword: password,
-            orderId: order.id.toString(),
-            orderValue: Number(order.total_amount ?? order.amount ?? 0),
-            paymentMethod: order.payment_gateway === 'mercadopago'
-              ? 'Mercado Pago'
-              : order.payment_gateway === 'appmax'
-                ? 'AppMax'
-                : (order.payment_gateway || order.payment_method || 'checkout')
-          })
-          
-          // Log imediato do resultado do email
-          await supabaseAdmin.from('integration_logs').insert({
-            order_id: order.id,
-            action: 'send_email',
-            status: emailResult.success ? 'success' : 'error',
-            recipient_email: order.customer_email,
-            error_message: emailResult.error || null,
-            details: {
-              email_id: emailResult.emailId,
-              password_sent: !!password,
-              sent_at: new Date().toISOString()
-            },
-            duration_ms: Date.now() - itemStartTime
-          })
-          
-          if (emailResult.success) {
-            console.log('✅ Email enviado com sucesso!')
-          } else {
-            console.error('❌ Falha ao enviar email:', emailResult.error)
-            throw new Error(`Falha ao enviar email: ${emailResult.error}`)
-          }
-        }
-
-        // =====================================================
-        // 6️⃣ FINALIZAR: provisioning → active
-        // =====================================================
-        
-        await supabaseAdmin
-          .from('sales')
-          .update({ order_status: 'active' })
-          .eq('id', order.id)
-
         await supabaseAdmin
           .from('provisioning_queue')
           .update({
-            status: 'completed',
-            completed_at: new Date().toISOString()
+            stage: 'failed_permanent',
+            status: 'failed',
+            last_error: 'Esgotadas tentativas de retry'
           })
           .eq('id', item.id)
-
-        console.log(`✅ Pedido ${order.id} ativado com sucesso!`)
-        result.processed++
-
-      } catch (itemError: any) {
-        const catchSaleId = item.sale_id || item.order_id || 'unknown'
-        console.error(`❌ Erro ao processar item ${item.id}:`, itemError)
-
+        
+        await supabaseAdmin
+          .from('sales')
+          .update({ order_status: 'provisioning_failed' })
+          .eq('id', saleId)
+        
         result.failed++
         result.errors.push({
-          sale_id: catchSaleId,
-          error: itemError.message
+          sale_id: saleId,
+          stage: item.stage || 'unknown',
+          error: 'Esgotadas tentativas de retry'
         })
-
-        // =====================================================
-        // 7️⃣ TRATAMENTO DE ERRO COM RETRY
-        // =====================================================
         
-        const newRetryCount = (item.retry_count || 0) + 1
-        const maxRetries = item.max_retries || 3
-        const saleIdForRetry = item.sale_id || item.order_id
+        continue
+      }
 
-        if (newRetryCount >= maxRetries) {
-          // Esgotou tentativas - marcar como falha permanente
-          console.log(`❌ Esgotadas ${maxRetries} tentativas, marcando como falha permanente`)
+      // Buscar dados do pedido
+      let orderData = null
+      
+      const { data: salesOrder } = await supabaseAdmin
+        .from('sales')
+        .select('*')
+        .eq('id', saleId)
+        .maybeSingle()
 
-          // Tentar atualizar em sales, se não existir tenta orders
-          const { error: salesUpdateError } = await supabaseAdmin
-            .from('sales')
-            .update({ order_status: 'provisioning_failed' })
-            .eq('id', saleIdForRetry)
-
-          if (salesUpdateError) {
-            await supabaseAdmin
-              .from('orders')
-              .update({ status: 'provisioning_failed' })
-              .eq('id', saleIdForRetry)
-          }
-
-          await supabaseAdmin
-            .from('provisioning_queue')
-            .update({
-              status: 'failed',
-              retry_count: newRetryCount,
-              last_error: itemError.message,
-              error_details: {
-                message: itemError.message,
-                stack: itemError.stack,
-                timestamp: new Date().toISOString()
-              }
-            })
-            .eq('id', item.id)
-
-          // Log de erro permanente
-          await supabaseAdmin.from('integration_logs').insert({
-            order_id: saleIdForRetry,
-            action: 'create_user_lovable',
-            status: 'error',
-            recipient_email: item.order?.customer_email,
-            error_message: itemError.message,
-            details: {
-              retry_count: newRetryCount,
-              max_retries: maxRetries,
-              permanent_failure: true
-            },
-            duration_ms: Date.now() - itemStartTime
-          })
-
-        } else {
-          // Agendar próximo retry (exponential backoff)
-          const delayMinutes = Math.pow(2, newRetryCount) * 5 // 5min, 10min, 20min
-          const nextRetryAt = new Date(Date.now() + delayMinutes * 60 * 1000)
-
-          console.log(`🔄 Agendando retry ${newRetryCount}/${maxRetries} para ${nextRetryAt.toISOString()}`)
-
-          await supabaseAdmin
-            .from('provisioning_queue')
-            .update({
-              status: 'failed',
-              retry_count: newRetryCount,
-              last_error: itemError.message,
-              next_retry_at: nextRetryAt.toISOString(),
-              error_details: {
-                message: itemError.message,
-                timestamp: new Date().toISOString(),
-                retry_count: newRetryCount
-              }
-            })
-            .eq('id', item.id)
-
-          // Voltar status do pedido para paid (para tentar novamente)
-          const { error: salesRetryError } = await supabaseAdmin
-            .from('sales')
-            .update({ order_status: 'paid' })
-            .eq('id', saleIdForRetry)
-
-          if (salesRetryError) {
-            await supabaseAdmin
-              .from('orders')
-              .update({ status: 'paid' })
-              .eq('id', saleIdForRetry)
-          }
-
-          // Log de erro temporário
-          await supabaseAdmin.from('integration_logs').insert({
-            order_id: saleIdForRetry,
-            action: 'create_user_lovable',
-            status: 'error',
-            recipient_email: item.order?.customer_email,
-            error_message: itemError.message,
-            details: {
-              retry_count: newRetryCount,
-              max_retries: maxRetries,
-              next_retry_at: nextRetryAt.toISOString(),
-              will_retry: true
-            },
-            duration_ms: Date.now() - itemStartTime
-          })
+      if (salesOrder) {
+        orderData = salesOrder
+      } else {
+        // Tentar na tabela orders (legado)
+        const { data: legacyOrder } = await supabaseAdmin
+          .from('orders')
+          .select('*')
+          .eq('id', saleId)
+          .maybeSingle()
+        
+        if (legacyOrder) {
+          orderData = legacyOrder
+          console.log(`📋 Usando pedido da tabela orders (legado)`)
         }
+      }
+
+      if (!orderData) {
+        console.warn(`⚠️ Pedido ${saleId} não encontrado em sales nem orders`)
+        continue
+      }
+
+      // Verificar status do pedido
+      const orderStatus = orderData.order_status || orderData.status
+      if (orderStatus !== 'paid' && orderStatus !== 'approved' && orderStatus !== 'provisioning') {
+        console.log(`⚠️ Pedido ${saleId} não está pago (${orderStatus}), pulando...`)
+        continue
+      }
+
+      console.log(`\n🔄 Processando item ${item.id} | Stage: ${item.stage || 'queued'}`)
+
+      // =====================================================
+      // ROTEAMENTO POR STAGE (Máquina de Estados)
+      // =====================================================
+      const currentStage = item.stage || 'queued'
+
+      switch (currentStage) {
+        case 'queued':
+        case 'creating_user':
+        case 'failed_at_user':
+        case 'pending': // Compatibilidade com sistema antigo
+          // PASSO B: Criar usuário
+          const userResult = await executeUserCreation(item, orderData)
+          
+          if (userResult.success) {
+            result.stages!.users_created++
+            
+            // Se criou usuário, já tenta enviar email na mesma execução
+            // Recarregar item atualizado
+            const { data: updatedItem } = await supabaseAdmin
+              .from('provisioning_queue')
+              .select('*')
+              .eq('id', item.id)
+              .single()
+            
+            if (updatedItem && updatedItem.stage === 'sending_credentials') {
+              const emailResult = await executeSendCredentials(updatedItem, orderData)
+              
+              if (emailResult.success) {
+                result.stages!.emails_sent++
+                result.processed++
+              } else {
+                result.errors.push({
+                  sale_id: saleId,
+                  stage: 'sending_credentials',
+                  error: emailResult.error || 'Erro desconhecido'
+                })
+              }
+            }
+          } else {
+            result.failed++
+            result.errors.push({
+              sale_id: saleId,
+              stage: 'creating_user',
+              error: userResult.error || 'Erro desconhecido'
+            })
+          }
+          break
+
+        case 'sending_credentials':
+        case 'failed_at_email':
+        case 'processing': // Compatibilidade com sistema antigo
+          // PASSO C: Enviar credenciais
+          const emailResult = await executeSendCredentials(item, orderData)
+          
+          if (emailResult.success) {
+            result.stages!.emails_sent++
+            result.processed++
+          } else {
+            result.failed++
+            result.errors.push({
+              sale_id: saleId,
+              stage: 'sending_credentials',
+              error: emailResult.error || 'Erro desconhecido'
+            })
+          }
+          break
+
+        case 'completed':
+          console.log(`✅ Item ${item.id} já está completed, pulando...`)
+          break
+
+        case 'failed_permanent':
+        case 'failed': // Compatibilidade
+          console.log(`❌ Item ${item.id} tem falha permanente, pulando...`)
+          break
+
+        default:
+          console.warn(`⚠️ Stage desconhecido: ${currentStage}, tratando como queued`)
+          // Tratar como queued
+          const fallbackResult = await executeUserCreation(item, orderData)
+          if (fallbackResult.success) {
+            result.stages!.users_created++
+          }
       }
     }
 
     // =====================================================
-    // 8️⃣ RESUMO DO PROCESSAMENTO
+    // 3️⃣ RESUMO DO PROCESSAMENTO
     // =====================================================
-    
     const duration = Date.now() - startTime
     
-    console.log('\n📊 Resumo do processamento:')
+    console.log('\n📊 [PROVISIONING V2] Resumo:')
+    console.log(`  👤 Usuários criados: ${result.stages?.users_created || 0}`)
+    console.log(`  📧 Emails enviados: ${result.stages?.emails_sent || 0}`)
     console.log(`  ✅ Processados: ${result.processed}`)
     console.log(`  ❌ Falhas: ${result.failed}`)
     console.log(`  ⏱️ Tempo: ${duration}ms`)
 
-    if (result.errors.length > 0) {
-      console.log('  Erros:')
-      result.errors.forEach(err => {
-        console.log(`    - Pedido ${err.sale_id}: ${err.error}`)
-      })
-    }
-
     return result
 
   } catch (error: any) {
-    console.error('❌ Erro crítico no processamento da fila:', error)
+    console.error('❌ Erro crítico no processamento:', error)
     
     result.success = false
     result.errors.push({
       sale_id: 'system',
+      stage: 'system',
       error: error.message
     })
 
@@ -442,70 +582,35 @@ export async function processSpecificOrder(orderId: string): Promise<{
   console.log(`🔧 [MANUAL] Reprocessando pedido: ${orderId}`)
 
   try {
-    // Verificar se existe na fila (compatível com sale_id/order_id)
-    let queueItem: any = null
-
-    const { data: queueBySale, error: queueBySaleError } = await supabaseAdmin
+    // Verificar se existe na fila
+    const { data: existingItem } = await supabaseAdmin
       .from('provisioning_queue')
       .select('*')
       .eq('sale_id', orderId)
       .maybeSingle()
 
-    if (queueBySaleError && !queueBySaleError.message?.includes('sale_id')) {
-      throw queueBySaleError
-    }
-
-    if (queueBySale) {
-      queueItem = queueBySale
-    } else if (queueBySaleError?.message?.includes('sale_id')) {
-      const { data: queueByOrder, error: queueByOrderError } = await supabaseAdmin
-        .from('provisioning_queue')
-        .select('*')
-        .eq('order_id', orderId)
-        .maybeSingle()
-
-      if (queueByOrderError && !queueByOrderError.message?.includes('order_id')) {
-        throw queueByOrderError
-      }
-
-      queueItem = queueByOrder
-    }
-
-    if (!queueItem) {
-      // Criar entrada na fila
-      // Inserir na fila com fallback de coluna
-      const { error: insertSaleError } = await supabaseAdmin
-        .from('provisioning_queue')
-        .insert({
-          sale_id: orderId,
-          status: 'pending',
-          retry_count: 0
-        })
-
-      if (insertSaleError?.message?.includes('sale_id')) {
-        const { error: insertOrderError } = await supabaseAdmin
-          .from('provisioning_queue')
-          .insert({
-            order_id: orderId,
-            status: 'pending',
-            retry_count: 0
-          })
-
-        if (insertOrderError) {
-          throw insertOrderError
-        }
-      } else if (insertSaleError) {
-        throw insertSaleError
-      }
-    } else {
-      // Resetar para pending
+    if (existingItem) {
+      // Resetar para queued para reprocessar do início
       await supabaseAdmin
         .from('provisioning_queue')
         .update({
+          stage: 'queued',
           status: 'pending',
+          retry_count: 0,
+          last_error: null,
           next_retry_at: null
         })
-        .eq('id', queueItem.id)
+        .eq('id', existingItem.id)
+    } else {
+      // Criar entrada na fila
+      await supabaseAdmin
+        .from('provisioning_queue')
+        .insert({
+          sale_id: orderId,
+          stage: 'queued',
+          status: 'pending',
+          retry_count: 0
+        })
     }
 
     // Processar fila
@@ -514,8 +619,10 @@ export async function processSpecificOrder(orderId: string): Promise<{
     return {
       success: result.processed > 0,
       message: result.processed > 0 
-        ? 'Pedido reprocessado com sucesso'
-        : 'Erro ao reprocessar pedido'
+        ? `Pedido reprocessado: ${result.stages?.users_created || 0} usuário(s), ${result.stages?.emails_sent || 0} email(s)`
+        : result.errors.length > 0
+          ? `Erro: ${result.errors[0].error}`
+          : 'Nenhuma ação realizada'
     }
 
   } catch (error: any) {

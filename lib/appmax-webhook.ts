@@ -4,6 +4,7 @@ import { supabaseAdmin } from './supabase'
 import { sendPurchaseEvent } from './meta-capi'
 import { createAndSaveRedirectUrl } from './redirect-helper'
 import { processProvisioningQueue } from './provisioning-worker'
+import { sendPurchaseConfirmationEmail } from './email'
 
 interface AppmaxWebhookResult {
   response: NextResponse
@@ -762,6 +763,34 @@ export async function handleAppmaxWebhook(request: NextRequest, endpoint: string
   }
 
   if (SUCCESS_STATUSES.has(status)) {
+    // =====================================================
+    // 🚀 TAREFA 1: EMAIL IMEDIATO DE CONFIRMAÇÃO (FAST RESPONSE)
+    // =====================================================
+    // Envia email de confirmação ANTES de qualquer processamento pesado.
+    // Se Lovable ou qualquer serviço falhar, o cliente já recebeu confirmação!
+    if (customerEmail && customerName) {
+      console.log(`[AppMax ${orderId}] 📧 [FAST] Enviando email de confirmação imediato...`)
+      
+      // Fire-and-forget com Promise - não bloqueia o fluxo
+      sendPurchaseConfirmationEmail({
+        to: customerEmail,
+        customerName: customerName,
+        orderId: orderId || `appmax-${Date.now()}`,
+        orderValue: totalAmount,
+        paymentMethod: paymentMethod || 'appmax'
+      }).then(result => {
+        if (result.success) {
+          console.log(`[AppMax ${orderId}] ✅ [FAST] Email de confirmação enviado: ${result.emailId}`)
+        } else {
+          console.error(`[AppMax ${orderId}] ❌ [FAST] Falha no email de confirmação: ${result.error}`)
+        }
+      }).catch(err => {
+        console.error(`[AppMax ${orderId}] ❌ [FAST] Erro no email de confirmação:`, err)
+      })
+      
+      // Não aguarda o resultado - continua processando
+    }
+
     if (customerEmail) {
       try {
         await supabaseAdmin

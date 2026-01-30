@@ -10,7 +10,7 @@ import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { MercadoPagoWebhookSchema } from '@/lib/validators/checkout';
 import { createAndSaveRedirectUrl } from '@/lib/redirect-helper';
-import { sendWelcomeEmail as sendEmailWithTemplate } from '@/lib/email';
+import { sendWelcomeEmail as sendEmailWithTemplate, sendPurchaseConfirmationEmail } from '@/lib/email';
 import { sendPurchaseEvent } from '@/lib/meta-capi';
 import { createLovableUser, generateSecurePassword } from '@/services/lovable-integration';
 
@@ -427,6 +427,34 @@ export async function POST(request: NextRequest) {
       }
       
       return NextResponse.json({ received: true, message: 'Already processed' });
+    }
+    
+    // ==================================================
+    // 🚀 TAREFA 1: EMAIL IMEDIATO DE CONFIRMAÇÃO (FAST RESPONSE)
+    // ==================================================
+    // Envia email de confirmação ANTES de qualquer processamento pesado.
+    // Se Lovable ou qualquer serviço falhar, o cliente já recebeu confirmação!
+    if (customerEmail && customerName) {
+      console.log(`[${saleId || paymentId}] 📧 [FAST] Enviando email de confirmação imediato...`);
+      
+      // Fire-and-forget com timeout curto - não bloqueia o fluxo
+      sendPurchaseConfirmationEmail({
+        to: customerEmail,
+        customerName: customerName,
+        orderId: saleId || paymentId,
+        orderValue: totalAmount,
+        paymentMethod: paymentMethod || 'mercadopago'
+      }).then(result => {
+        if (result.success) {
+          console.log(`[${saleId || paymentId}] ✅ [FAST] Email de confirmação enviado: ${result.emailId}`);
+        } else {
+          console.error(`[${saleId || paymentId}] ❌ [FAST] Falha no email de confirmação: ${result.error}`);
+        }
+      }).catch(err => {
+        console.error(`[${saleId || paymentId}] ❌ [FAST] Erro no email de confirmação:`, err);
+      });
+      
+      // Não aguarda o resultado - continua processando
     }
     
     // ==================================================

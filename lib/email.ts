@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import WelcomeEmail from '@/emails/WelcomeEmail'
+import PurchaseConfirmationEmail from '@/emails/PurchaseConfirmationEmail'
 import { supabaseAdmin } from './supabase'
 import { render } from '@react-email/render'
 
@@ -95,6 +96,118 @@ export async function sendWelcomeEmail(params: SendWelcomeEmailParams) {
     return { success: true, emailId: data?.id }
   } catch (error: any) {
     console.error('❌ Erro crítico ao enviar email:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// =====================================================
+// 📧 TAREFA 1: EMAIL IMEDIATO DE CONFIRMAÇÃO (FAST RESPONSE)
+// =====================================================
+export interface SendPurchaseConfirmationParams {
+  to: string
+  customerName: string
+  orderId: string
+  orderValue: number
+  paymentMethod: string
+}
+
+/**
+ * 🚀 Envia email de confirmação de compra IMEDIATAMENTE
+ * 
+ * Este email é enviado no momento do pagamento aprovado,
+ * ANTES de criar usuário ou qualquer outro processamento.
+ * 
+ * Objetivo: Tranquilizar o cliente de que a compra foi recebida.
+ */
+export async function sendPurchaseConfirmationEmail(params: SendPurchaseConfirmationParams) {
+  const startTime = Date.now()
+  
+  try {
+    console.log(`📧 [FAST] Enviando confirmação de compra para: ${params.to}`)
+
+    // Criar componente do email
+    const emailComponent = PurchaseConfirmationEmail({
+      customerName: params.customerName,
+      orderId: params.orderId,
+      orderValue: params.orderValue,
+      paymentMethod: params.paymentMethod,
+    })
+
+    // Renderizar para HTML (para logs)
+    let htmlContent = ''
+    try {
+      htmlContent = await render(emailComponent)
+    } catch (renderError) {
+      console.warn('⚠️ Não foi possível renderizar HTML:', renderError)
+    }
+
+    // Enviar o e-mail
+    const { data, error } = await resend.emails.send({
+      from: 'Gravador Médico <suporte@gravadormedico.com.br>',
+      to: params.to,
+      subject: '✅ Compra Confirmada! Seu acesso está sendo gerado - Gravador Médico',
+      react: emailComponent as any,
+    })
+
+    const duration = Date.now() - startTime
+
+    if (error) {
+      console.error(`❌ [FAST] Erro ao enviar confirmação (${duration}ms):`, error)
+      
+      // Log de erro (não bloqueia o fluxo)
+      try {
+        await supabaseAdmin.from('email_logs').insert({
+          recipient_email: params.to,
+          recipient_name: params.customerName,
+          subject: '✅ Compra Confirmada! Seu acesso está sendo gerado - Gravador Médico',
+          html_content: htmlContent || null,
+          email_type: 'purchase_confirmation',
+          from_email: 'suporte@gravadormedico.com.br',
+          from_name: 'Gravador Médico',
+          order_id: params.orderId,
+          status: 'failed',
+          error_message: error.message,
+          metadata: {
+            order_value: params.orderValue,
+            payment_method: params.paymentMethod,
+            duration_ms: duration,
+          },
+        })
+      } catch (logError) {
+        console.warn('⚠️ Erro ao salvar log de email:', logError)
+      }
+      
+      return { success: false, error: error.message }
+    }
+
+    // Log de sucesso
+    try {
+      await supabaseAdmin.from('email_logs').insert({
+        email_id: data?.id,
+        recipient_email: params.to,
+        recipient_name: params.customerName,
+        subject: '✅ Compra Confirmada! Seu acesso está sendo gerado - Gravador Médico',
+        html_content: htmlContent || null,
+        email_type: 'purchase_confirmation',
+        from_email: 'suporte@gravadormedico.com.br',
+        from_name: 'Gravador Médico',
+        order_id: params.orderId,
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        metadata: {
+          order_value: params.orderValue,
+          payment_method: params.paymentMethod,
+          duration_ms: duration,
+        },
+      })
+    } catch (logError) {
+      console.warn('⚠️ Erro ao salvar log de email:', logError)
+    }
+
+    console.log(`✅ [FAST] Confirmação enviada em ${duration}ms: ${data?.id}`)
+    return { success: true, emailId: data?.id }
+  } catch (error: any) {
+    console.error('❌ [FAST] Erro crítico ao enviar confirmação:', error)
     return { success: false, error: error.message }
   }
 }
