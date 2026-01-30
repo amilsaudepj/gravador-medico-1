@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { supabaseAdmin } from './supabase'
 import { getPaymentStatus } from './mercadopago'
 import { processProvisioningQueue } from './provisioning-worker'
+import { trackPurchase } from './tracking/core'
 
 /**
  * 🔔 WEBHOOK MERCADO PAGO - COM RACE CONDITION FIX
@@ -172,6 +173,28 @@ export async function handleMercadoPagoWebhook(request: NextRequest) {
       // 6️⃣ SE APROVADO, ENFILEIRAR PROVISIONAMENTO E PROCESSAR
       if (payment.status === 'approved' && sale) {
         console.log('✅ Pagamento aprovado! Enfileirando provisionamento...')
+
+        // 🎯 TRACKING: Disparo blindado para Meta CAPI + GA4
+        // Usando função do Hub de Tracking (nunca falha, sempre loga)
+        trackPurchase({
+          orderId: sale.id || `mp-${payment.id}`,
+          totalAmount: parseFloat(sale.total_amount) || payment.transaction_amount || 0,
+          customerEmail: sale.customer_email || undefined,
+          customerPhone: sale.customer_phone || undefined,
+          customerName: sale.customer_name || undefined,
+          productName: 'Gravador Médico',
+          productIds: ['gravador_medico'],
+          currency: 'BRL',
+          eventSourceUrl: 'https://gravadormedico.com.br/checkout',
+        }).then(result => {
+          if (result.success) {
+            console.log(`[MercadoPago ${payment.id}] ✅ Tracking Purchase enviado:`, result.logs)
+          } else {
+            console.warn(`[MercadoPago ${payment.id}] ⚠️ Tracking Purchase parcial:`, result.logs)
+          }
+        }).catch(err => {
+          console.error(`[MercadoPago ${payment.id}] ❌ Tracking Purchase erro inesperado:`, err)
+        })
 
         // ✅ Limpar carrinho abandonado quando compra é aprovada
         if (sale.customer_email) {

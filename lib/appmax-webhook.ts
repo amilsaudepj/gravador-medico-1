@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from './supabase'
-import { sendPurchaseEvent } from './meta-capi'
+import { trackPurchase } from './tracking/core'
 import { createAndSaveRedirectUrl } from './redirect-helper'
 import { processProvisioningQueue } from './provisioning-worker'
 import { sendPurchaseConfirmationEmail } from './email'
@@ -802,13 +802,27 @@ export async function handleAppmaxWebhook(request: NextRequest, endpoint: string
       }
     }
 
-    await sendPurchaseEvent({
-      orderId,
+    // 🎯 TRACKING: Disparo blindado para Meta CAPI + GA4
+    // Usando função do Hub de Tracking (nunca falha, sempre loga)
+    trackPurchase({
+      orderId: orderId || `appmax-${Date.now()}`,
+      totalAmount,
       customerEmail: customerEmail || undefined,
       customerPhone: customerPhone || undefined,
       customerName: customerName || undefined,
-      totalAmount,
-      currency: 'BRL'
+      productName: 'Gravador Médico',
+      productIds: ['gravador_medico'],
+      currency: 'BRL',
+      eventSourceUrl: 'https://gravadormedico.com.br/checkout',
+    }).then(result => {
+      if (result.success) {
+        console.log(`[AppMax ${orderId}] ✅ Tracking Purchase enviado:`, result.logs)
+      } else {
+        console.warn(`[AppMax ${orderId}] ⚠️ Tracking Purchase parcial:`, result.logs)
+      }
+    }).catch(err => {
+      // NUNCA deve chegar aqui pois trackPurchase não lança exceção
+      console.error(`[AppMax ${orderId}] ❌ Tracking Purchase erro inesperado:`, err)
     })
 
     // =====================================================
